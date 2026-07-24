@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
         Title="Recovery Center" Height="680" Width="1040"
-        MinHeight="540" MinWidth="820"
+        MinHeight="420" MinWidth="600"
         WindowStartupLocation="CenterOwner"
         Icon="Assets/app-icon.ico"
         Loaded="Window_Loaded"
@@ -16,7 +16,16 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <Grid Margin="24,22">
+    <ScrollViewer x:Name="RecoveryScrollViewer"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto"
+                  CanContentScroll="False"
+                  automation:AutomationProperties.Name="Recovery center content">
+    <Border MinWidth="808" MinHeight="604"
+            Width="{Binding ViewportWidth, ElementName=RecoveryScrollViewer}"
+            Height="{Binding ViewportHeight, ElementName=RecoveryScrollViewer}"
+            Padding="24,22">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="2*"/>
@@ -46,6 +55,16 @@
                         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                         <Setter Property="Padding" Value="0"/>
                         <Setter Property="Margin" Value="0,0,0,4"/>
+                        <Setter Property="automation:AutomationProperties.Name">
+                            <Setter.Value>
+                                <MultiBinding StringFormat="{}{0}; {1}; {2}; {3}">
+                                    <Binding Path="CreatedAt"/>
+                                    <Binding Path="Operation"/>
+                                    <Binding Path="Assessment"/>
+                                    <Binding Path="Message"/>
+                                </MultiBinding>
+                            </Setter.Value>
+                        </Setter>
                     </Style>
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
@@ -85,6 +104,21 @@
             <DataGrid Grid.Row="1" x:Name="RecoveryDetailsGrid"
                       AutoGenerateColumns="False" IsReadOnly="True"
                       automation:AutomationProperties.Name="Interrupted operation file evidence">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow"
+                           BasedOn="{StaticResource {x:Type DataGridRow}}">
+                        <Setter Property="automation:AutomationProperties.Name">
+                            <Setter.Value>
+                                <MultiBinding StringFormat="{}{0}; source {1}; destination {2}; {3}">
+                                    <Binding Path="State"/>
+                                    <Binding Path="SourcePath"/>
+                                    <Binding Path="DestinationPath"/>
+                                    <Binding Path="Message"/>
+                                </MultiBinding>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </DataGrid.RowStyle>
                 <DataGrid.Columns>
                     <DataGridCheckBoxColumn Header="Companion" Binding="{Binding IsCompanion}" Width="90"/>
                     <DataGridTextColumn Header="State" Binding="{Binding State}" Width="190"/>
@@ -103,6 +137,7 @@
             <TextBlock x:Name="RecoveryStatusTextBlock"
                        VerticalAlignment="Center" TextWrapping="Wrap"
                        Foreground="{StaticResource MutedTextBrush}"
+                       automation:AutomationProperties.Name="Recovery status"
                        automation:AutomationProperties.LiveSetting="Polite"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0">
                 <Button x:Name="RollbackButton" Content="_Roll Back Safely"
@@ -120,4 +155,6 @@
             </StackPanel>
         </Grid>
     </Grid>
+    </Border>
+    </ScrollViewer>
 </Window>

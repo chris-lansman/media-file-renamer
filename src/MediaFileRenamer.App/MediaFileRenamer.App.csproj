@@ -9,6 +9,12 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>MediaFileRenamer</AssemblyName>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <!-- This is a WPF process that uses WinForms only for native file/folder dialogs.
+         The explicit manifest owns process DPI awareness; suppress the WinForms
+         analyzer that otherwise asks the WPF entry point to call WinForms startup APIs. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <Product>Media File Renamer</Product>
     <Description>Safely matches and stages movie and television files with Plex-friendly names.</Description>
     <Authors>Media File Renamer contributors</Authors>
