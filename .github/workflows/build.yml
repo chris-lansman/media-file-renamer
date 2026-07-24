@@ -52,14 +52,18 @@ jobs:
           -p:TreatWarningsAsErrors=true
           -p:ContinuousIntegrationBuild=true
 
+      # .NET 10 MTP requires named solution selection and its own TRX options.
       - name: Run tests
         run: >-
-          dotnet test MediaFileRenamer.sln
+          dotnet test
+          --solution MediaFileRenamer.sln
           --configuration Release
           --no-build
           --no-restore
-          --logger "trx;LogFileName=MediaFileRenamer.trx"
           --results-directory TestResults
+          --report-trx
+          --report-trx-filename MediaFileRenamer.trx
+          --minimum-expected-tests 1
 
       - name: Audit NuGet dependencies
         shell: pwsh
