@@ -23,6 +23,8 @@ public partial class MainWindow : Window
     private AppSettings _settings = new();
     private bool _isSyncingSelection;
     private bool _isBusy;
+    private bool _firstRunPromptShown;
+    private readonly bool _showFirstRun;
     private CancellationTokenSource? _operationCancellation;
 
     public ObservableCollection<MediaPreviewItem> PreviewItems { get; } = [];
@@ -32,14 +34,29 @@ public partial class MainWindow : Window
         _applier = new RenameApplier(_journalService);
         InitializeComponent();
         EpisodeOrderComboBox.ItemsSource = Enum.GetValues<EpisodeOrder>();
+        _showFirstRun = !_settingsService.SettingsExist;
         _settings = _settingsService.Load();
         DiagnosticLog.Current.RegisterSensitiveValue(_settings.TmdbApiKey);
         DiagnosticLog.Current.RegisterSensitiveValue(_settings.TvdbApiKey);
         DiagnosticLog.Current.RegisterSensitiveValue(_settings.TvdbPin);
         OutputFolderTextBox.Text = _settings.DefaultOutputFolder;
+        OperationComboBox.SelectedIndex =
+            _settings.DefaultOperation == FileOperation.Copy ? 1 : 0;
         DataContext = this;
         UpdateCustomFormatVisibility();
         UpdateActionState();
+    }
+
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        if (!_showFirstRun || _firstRunPromptShown)
+        {
+            return;
+        }
+
+        _firstRunPromptShown = true;
+        ShowSettings(isFirstRun: true);
     }
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
@@ -426,7 +443,15 @@ public partial class MainWindow : Window
 
     private void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var window = new SettingsWindow(_settings, _settingsService.SettingsPath)
+        ShowSettings(isFirstRun: false);
+    }
+
+    private void ShowSettings(bool isFirstRun)
+    {
+        var window = new SettingsWindow(
+            _settings,
+            _settingsService.SettingsPath,
+            isFirstRun: isFirstRun)
         {
             Owner = this
         };
@@ -439,8 +464,17 @@ public partial class MainWindow : Window
             DiagnosticLog.Current.RegisterSensitiveValue(_settings.TvdbApiKey);
             DiagnosticLog.Current.RegisterSensitiveValue(_settings.TvdbPin);
             OutputFolderTextBox.Text = _settings.DefaultOutputFolder;
+            OperationComboBox.SelectedIndex =
+                _settings.DefaultOperation == FileOperation.Copy ? 1 : 0;
             RefreshDestinations();
-            StatusTextBlock.Text = "Settings saved.";
+            StatusTextBlock.Text = isFirstRun
+                ? "Setup complete. Add a small test batch to begin."
+                : "Settings saved.";
+        }
+        else if (isFirstRun)
+        {
+            StatusTextBlock.Text =
+                "First-run setup was skipped. Open File > Settings when you are ready.";
         }
     }
 

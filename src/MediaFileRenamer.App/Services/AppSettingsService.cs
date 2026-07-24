@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MediaFileRenamer.App.Services;
 
@@ -12,6 +13,7 @@ public sealed class AppSettings
     public bool UseTvdbFallback { get; set; } = true;
     public int AutoMatchConfidencePercent { get; set; } = 92;
     public string DefaultOutputFolder { get; set; } = GetDefaultOutputFolder();
+    public FileOperation DefaultOperation { get; set; } = FileOperation.Move;
 
     public static string GetDefaultOutputFolder()
     {
@@ -25,10 +27,12 @@ public sealed class AppSettingsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        WriteIndented = true
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() }
     };
 
     public string SettingsPath { get; }
+    public bool SettingsExist => File.Exists(SettingsPath);
 
     public AppSettingsService(string? settingsPath = null)
     {
@@ -48,7 +52,7 @@ public sealed class AppSettingsService
         try
         {
             var json = File.ReadAllText(SettingsPath);
-            return Normalize(JsonSerializer.Deserialize<AppSettings>(json));
+            return Normalize(JsonSerializer.Deserialize<AppSettings>(json, JsonOptions));
         }
         catch
         {

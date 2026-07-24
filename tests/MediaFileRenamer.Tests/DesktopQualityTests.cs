@@ -151,6 +151,27 @@ public sealed class DesktopWindowQualityTests
     }
 
     [STATestMethod]
+    public void SettingsWindow_FirstRunExplainsSafetyAndDefaultsToCopy()
+    {
+        _ = Application.Current ?? new Application();
+        var window = new SettingsWindow(
+            new AppSettings(),
+            @"C:\settings.json",
+            isFirstRun: true);
+
+        Assert.AreEqual(
+            Visibility.Visible,
+            ((FrameworkElement)window.FindName("FirstRunBanner")).Visibility);
+        Assert.AreEqual(
+            1,
+            ((ComboBox)window.FindName("DefaultOperationComboBox")).SelectedIndex);
+        Assert.AreEqual(
+            "_Save and Start",
+            ((Button)window.FindName("SaveSettingsButton")).Content);
+        window.Close();
+    }
+
+    [STATestMethod]
     public void AboutWindow_ContainsProviderAttributionAndCredentialPolicy()
     {
         _ = Application.Current ?? new Application();

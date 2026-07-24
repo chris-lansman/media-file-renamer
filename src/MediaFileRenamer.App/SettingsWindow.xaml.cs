@@ -13,7 +13,8 @@ public partial class SettingsWindow : Window
     public SettingsWindow(
         AppSettings settings,
         string settingsPath,
-        MetadataProviderTestService? providerTester = null)
+        MetadataProviderTestService? providerTester = null,
+        bool isFirstRun = false)
     {
         InitializeComponent();
         _providerTester = providerTester ?? new MetadataProviderTestService();
@@ -25,7 +26,8 @@ public partial class SettingsWindow : Window
             TvdbPin = settings.TvdbPin,
             UseTvdbFallback = settings.UseTvdbFallback,
             AutoMatchConfidencePercent = settings.AutoMatchConfidencePercent,
-            DefaultOutputFolder = settings.DefaultOutputFolder
+            DefaultOutputFolder = settings.DefaultOutputFolder,
+            DefaultOperation = settings.DefaultOperation
         };
 
         TmdbApiKeyBox.Text = Settings.TmdbApiKey;
@@ -36,6 +38,15 @@ public partial class SettingsWindow : Window
         DefaultOutputFolderTextBox.Text = Settings.DefaultOutputFolder;
         AutoMatchConfidenceTextBox.Text = Settings.AutoMatchConfidencePercent.ToString();
         SettingsPathTextBox.Text = settingsPath;
+        DefaultOperationComboBox.SelectedIndex =
+            Settings.DefaultOperation == FileOperation.Copy ? 1 : 0;
+        if (isFirstRun)
+        {
+            Title = "Welcome to Media File Renamer";
+            FirstRunBanner.Visibility = Visibility.Visible;
+            SaveSettingsButton.Content = "_Save and Start";
+            DefaultOperationComboBox.SelectedIndex = 1;
+        }
         RegisterCredentialsForRedaction();
     }
 
@@ -50,6 +61,9 @@ public partial class SettingsWindow : Window
         Settings.DefaultOutputFolder = string.IsNullOrWhiteSpace(DefaultOutputFolderTextBox.Text)
             ? AppSettings.GetDefaultOutputFolder()
             : DefaultOutputFolderTextBox.Text.Trim();
+        Settings.DefaultOperation = DefaultOperationComboBox.SelectedIndex == 1
+            ? FileOperation.Copy
+            : FileOperation.Move;
         RegisterCredentialsForRedaction();
         DiagnosticLog.Current.Information("Settings updated.");
         DialogResult = true;
