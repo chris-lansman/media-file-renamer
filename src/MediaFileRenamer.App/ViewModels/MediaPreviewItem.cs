@@ -12,7 +12,9 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     private int? _year;
     private int? _season;
     private int? _episode;
+    private int? _episodeEnd;
     private int? _tmdbId;
+    private int? _tvdbId;
     private string _episodeTitle = "";
     private string _mediaType = "Movie";
 
@@ -23,10 +25,18 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     public string SourceFolder => Path.GetDirectoryName(SourcePath) ?? "";
     public string Extension { get; init; } = "";
     public string ExtensionLabel => Extension.TrimStart('.').ToUpperInvariant();
+    public List<string> CompanionPaths { get; } = [];
+    public int CompanionCount => CompanionPaths.Count;
     public string MediaType
     {
         get => _mediaType;
-        set => SetField(ref _mediaType, value);
+        set
+        {
+            if (SetField(ref _mediaType, value))
+            {
+                NotifyReviewStateChanged();
+            }
+        }
     }
     public string TitleGuess { get; set; } = "";
     public string MatchedTitle
@@ -44,19 +54,49 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     public int? Season
     {
         get => _season;
-        set => SetField(ref _season, value);
+        set
+        {
+            if (SetField(ref _season, value))
+            {
+                NotifyReviewStateChanged();
+            }
+        }
     }
 
     public int? Episode
     {
         get => _episode;
-        set => SetField(ref _episode, value);
+        set
+        {
+            if (SetField(ref _episode, value))
+            {
+                NotifyReviewStateChanged();
+            }
+        }
     }
+
+    public int? EpisodeEnd
+    {
+        get => _episodeEnd;
+        set => SetField(ref _episodeEnd, value);
+    }
+
+    public DateOnly? AirDate { get; set; }
+    public int? AbsoluteEpisode { get; set; }
+    public int? PartNumber { get; set; }
+    public string Edition { get; set; } = "";
+    public Services.EpisodeOrder EpisodeOrder { get; set; } = Services.EpisodeOrder.Default;
 
     public int? TmdbId
     {
         get => _tmdbId;
         set => SetField(ref _tmdbId, value);
+    }
+
+    public int? TvdbId
+    {
+        get => _tvdbId;
+        set => SetField(ref _tvdbId, value);
     }
 
     public string EpisodeTitle
@@ -87,7 +127,7 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
         {
             if (SetField(ref _status, value))
             {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MatchState)));
+                NotifyReviewStateChanged();
             }
         }
     }
@@ -102,14 +142,22 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
                 return "Blocked";
             }
 
-            if (Status.Contains("needs review", StringComparison.OrdinalIgnoreCase)
+            if (Status is "Moved" or "Copied" or "Already named")
+            {
+                return "Complete";
+            }
+
+            if (MediaType == "Unknown"
+                || (MediaType == "TV" && (Season is null || Episode is null))
+                || Status.Contains("needs review", StringComparison.OrdinalIgnoreCase)
                 || Status.Contains("uncertain", StringComparison.OrdinalIgnoreCase)
                 || Status.StartsWith("No ", StringComparison.OrdinalIgnoreCase))
             {
                 return "Review needed";
             }
 
-            if (Status.StartsWith("TMDB", StringComparison.OrdinalIgnoreCase))
+            if (Status.StartsWith("TMDB", StringComparison.OrdinalIgnoreCase)
+                || Status.StartsWith("TVDB", StringComparison.OrdinalIgnoreCase))
             {
                 return "Matched";
             }
@@ -120,16 +168,28 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
                 return "Manual choice";
             }
 
-            if (Status is "Moved" or "Copied" or "Already named")
-            {
-                return "Complete";
-            }
-
             return "Ready to match";
         }
     }
 
+    public string MatchLabel => MatchState == "Matched"
+        ? Status.StartsWith("TVDB", StringComparison.OrdinalIgnoreCase)
+            ? "Matched · TVDB"
+            : Status.StartsWith("TMDB", StringComparison.OrdinalIgnoreCase)
+                ? "Matched · TMDB"
+                : "Matched"
+        : MatchState;
+
+    public bool RequiresReview => MatchState is "Review needed" or "Ready to match" or "Blocked";
+
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void NotifyReviewStateChanged()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MatchState)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MatchLabel)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RequiresReview)));
+    }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
