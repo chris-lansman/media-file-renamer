@@ -10,6 +10,12 @@
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#095B7D"/>
     <SolidColorBrush x:Key="AccentPressedBrush" Color="#074D6A"/>
     <SolidColorBrush x:Key="AccentSoftBrush" Color="#E5F4FA"/>
+    <SolidColorBrush x:Key="MatchBrush" Color="#166B4A"/>
+    <SolidColorBrush x:Key="MatchSoftBrush" Color="#DFF5EC"/>
+    <SolidColorBrush x:Key="ReviewBrush" Color="#9A5B00"/>
+    <SolidColorBrush x:Key="ReviewSoftBrush" Color="#FFF1D6"/>
+    <SolidColorBrush x:Key="BlockedBrush" Color="#A62D26"/>
+    <SolidColorBrush x:Key="BlockedSoftBrush" Color="#FDE8E7"/>
 
     <ControlTemplate x:Key="StandardButtonTemplate" TargetType="Button">
         <Border x:Name="Border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"

@@ -39,6 +39,26 @@ public sealed class WindowSmokeTests
 }
 
 [TestClass]
+public sealed class MediaPreviewItemTests
+{
+    [TestMethod]
+    [DataRow("TMDB auto 100%", "Matched")]
+    [DataRow("TMDB show match", "Matched")]
+    [DataRow("Needs review", "Review needed")]
+    [DataRow("TV matched; episode needs review", "Review needed")]
+    [DataRow("Type uncertain; matching folder and files", "Review needed")]
+    [DataRow("Failed: destination file already exists", "Blocked")]
+    [DataRow("Manual TMDB match", "Manual choice")]
+    [DataRow("Ready", "Ready to match")]
+    public void MatchState_SummarizesDetailedStatus(string status, string expected)
+    {
+        var item = new MediaPreviewItem { Status = status };
+
+        Assert.AreEqual(expected, item.MatchState);
+    }
+}
+
+[TestClass]
 public sealed class MediaScannerTests
 {
     [TestMethod]

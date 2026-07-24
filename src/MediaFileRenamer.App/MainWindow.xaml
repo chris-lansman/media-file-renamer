@@ -114,16 +114,14 @@
                 </DockPanel>
                 <DockPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,8">
                     <TextBlock Text="Proposed Names" Style="{StaticResource SectionTitleStyle}"/>
-                    <TextBlock Text="Review before applying" Foreground="{StaticResource MutedTextBrush}" Margin="10,3,0,0"/>
+                    <TextBlock Text="Match confidence" Foreground="{StaticResource MutedTextBrush}" Margin="10,3,0,0"/>
                 </DockPanel>
 
                 <DataGrid Grid.Row="1" Grid.Column="0" x:Name="OriginalGrid" Style="{StaticResource PaneGridStyle}"
                           ItemsSource="{Binding PreviewItems}" SelectionChanged="OriginalGrid_SelectionChanged">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="File" Binding="{Binding SourceFileName}" Width="2*"/>
+                        <DataGridTextColumn Header="Original file" Binding="{Binding SourceFileName}" Width="3*"/>
                         <DataGridTextColumn Header="Source folder" Binding="{Binding SourceFolder}" Width="2*"/>
-                        <DataGridTextColumn Header="Type" Binding="{Binding MediaType}" Width="76"/>
-                        <DataGridTextColumn Header="Ext" Binding="{Binding ExtensionLabel}" Width="60"/>
                     </DataGrid.Columns>
                 </DataGrid>
 
@@ -138,10 +136,69 @@
                 <DataGrid Grid.Row="1" Grid.Column="2" x:Name="NewNamesGrid" Style="{StaticResource PaneGridStyle}"
                           ItemsSource="{Binding PreviewItems}" SelectionChanged="NewNamesGrid_SelectionChanged">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="New file" Binding="{Binding DestinationFileName}" Width="2*"/>
+                        <DataGridTextColumn Header="Proposed file name" Binding="{Binding DestinationFileName}" Width="3*"/>
                         <DataGridTextColumn Header="Destination folder" Binding="{Binding DestinationFolder}" Width="2*"/>
-                        <DataGridTextColumn Header="Ext" Binding="{Binding ExtensionLabel}" Width="60"/>
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="150"/>
+                        <DataGridTemplateColumn Header="Match" Width="145">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Padding="8,4" CornerRadius="10" HorizontalAlignment="Left" ToolTip="{Binding Status}">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding MatchState}" Value="Matched">
+                                                        <Setter Property="Background" Value="{StaticResource MatchSoftBrush}"/>
+                                                        <Setter Property="BorderBrush" Value="#B9E5D1"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding MatchState}" Value="Review needed">
+                                                        <Setter Property="Background" Value="{StaticResource ReviewSoftBrush}"/>
+                                                        <Setter Property="BorderBrush" Value="#F0D29A"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding MatchState}" Value="Blocked">
+                                                        <Setter Property="Background" Value="{StaticResource BlockedSoftBrush}"/>
+                                                        <Setter Property="BorderBrush" Value="#F1B9B4"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding MatchState}" Value="Manual choice">
+                                                        <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
+                                                        <Setter Property="BorderBrush" Value="#B8DCEB"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding MatchState}" Value="Complete">
+                                                        <Setter Property="Background" Value="{StaticResource MatchSoftBrush}"/>
+                                                        <Setter Property="BorderBrush" Value="#B9E5D1"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding MatchState}" FontSize="12" FontWeight="SemiBold">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding MatchState}" Value="Matched">
+                                                            <Setter Property="Foreground" Value="{StaticResource MatchBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding MatchState}" Value="Review needed">
+                                                            <Setter Property="Foreground" Value="{StaticResource ReviewBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding MatchState}" Value="Blocked">
+                                                            <Setter Property="Foreground" Value="{StaticResource BlockedBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding MatchState}" Value="Manual choice">
+                                                            <Setter Property="Foreground" Value="{StaticResource AccentHoverBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding MatchState}" Value="Complete">
+                                                            <Setter Property="Foreground" Value="{StaticResource MatchBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
             </Grid>

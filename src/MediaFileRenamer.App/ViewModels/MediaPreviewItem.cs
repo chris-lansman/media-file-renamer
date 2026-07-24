@@ -83,7 +83,50 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     public string Status
     {
         get => _status;
-        set => SetField(ref _status, value);
+        set
+        {
+            if (SetField(ref _status, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MatchState)));
+            }
+        }
+    }
+
+    public string MatchState
+    {
+        get
+        {
+            if (Status.StartsWith("Failed", StringComparison.OrdinalIgnoreCase)
+                || Status.StartsWith("Invalid", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Blocked";
+            }
+
+            if (Status.Contains("needs review", StringComparison.OrdinalIgnoreCase)
+                || Status.Contains("uncertain", StringComparison.OrdinalIgnoreCase)
+                || Status.StartsWith("No ", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Review needed";
+            }
+
+            if (Status.StartsWith("TMDB", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Matched";
+            }
+
+            if (Status.StartsWith("Manual", StringComparison.OrdinalIgnoreCase)
+                || Status.StartsWith("Local", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Manual choice";
+            }
+
+            if (Status is "Moved" or "Copied" or "Already named")
+            {
+                return "Complete";
+            }
+
+            return "Ready to match";
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
