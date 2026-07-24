@@ -117,6 +117,9 @@ The release workflow verifies formatting, treats compiler warnings as errors, ru
 
 Maintainer setup for optional signing and the remaining MSIX requirements is documented in [docs/RELEASING.md](docs/RELEASING.md).
 
+Before promoting a build for daily end-user use, run the disposable fixture
+generator and complete the [real-world acceptance matrix](docs/ACCEPTANCE.md).
+
 ## Development
 
 The solution targets .NET 10 on Windows. Build and run the complete test suite with:
@@ -125,10 +128,10 @@ The solution targets .NET 10 on Windows. Build and run the complete test suite w
 dotnet restore MediaFileRenamer.sln
 dotnet format MediaFileRenamer.sln --verify-no-changes --no-restore --severity warn
 dotnet build MediaFileRenamer.sln --configuration Release --no-restore -p:TreatWarningsAsErrors=true
-dotnet test MediaFileRenamer.sln --configuration Release --no-build --no-restore
+dotnet test --solution MediaFileRenamer.sln --configuration Release --no-build --no-restore --results-directory TestResults --report-trx --report-trx-filename MediaFileRenamer.trx --minimum-expected-tests 1
 .github\scripts\Test-NuGetAudit.ps1 -SolutionPath MediaFileRenamer.sln
 ```
 
-The tests cover advanced filename parsing, movie/TV and custom naming, Windows path safety, unified TMDB/TVDB matching, provider-order episode lookup, retries and cancellation, metadata-provider labeling, companion files, collision and write preflight, transactional move/copy rollback, operation journals and undo, settings recovery, diagnostic redaction, provider checks, the all-or-nothing review gate, offline manual classification, and WPF window startup/state.
+The tests cover advanced filename parsing, movie/TV and custom naming, Windows path safety, unified TMDB/TVDB matching, provider-order episode lookup, retries and cancellation, metadata-provider labeling, companion files, collision and write preflight, transactional move/copy rollback, timestamp preservation, operation journals, interrupted-operation recovery and undo, settings recovery, first-run onboarding, diagnostic redaction, provider checks, the all-or-nothing review gate, offline manual classification, and WPF window startup/state.
 
 The app never overwrites an existing destination or silently changes the reviewed destination name. Successful items are removed from the review list; failed items remain with an actionable status.

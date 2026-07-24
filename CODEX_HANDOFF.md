@@ -21,10 +21,10 @@ The app should move or copy files there first. It must not automatically place m
 - Test project: `tests\MediaFileRenamer.Tests\MediaFileRenamer.Tests.csproj`
 - Last feature commit before this handoff document: `18a6603 Clarify match status in the review workspace`
 
-Run tests:
+Run the exact CI test command after restore and a Release build:
 
 ```powershell
-dotnet test MediaFileRenamer.sln --configuration Release
+dotnet test --solution MediaFileRenamer.sln --configuration Release --no-build --no-restore --results-directory TestResults --report-trx --report-trx-filename MediaFileRenamer.trx --minimum-expected-tests 1
 ```
 
 Build a local self-contained executable:
@@ -43,7 +43,7 @@ dist\MediaFileRenamer\MediaFileRenamer.exe
 
 - Windows executable first; the user should never need to launch a PowerShell script to use the application.
 - The app is a staging and renaming tool, not an automatic media-library importer.
-- Default operation is **Move to staged folder**; Copy is also available.
+- Existing users retain their saved/default operation. First-run onboarding recommends **Copy to staged folder** until the user has verified the workflow; Move remains available.
 - The user primarily uses Plex. The main preset should remain Plex-friendly and include TMDB IDs where available.
 - The user wants a side-by-side source and proposed-name review, similar in spirit to FileBot but easier to read.
 - File extensions and technical detail should not dominate the review UI. The important signal is whether a row is safely matched or needs attention.
@@ -96,6 +96,7 @@ Important implementation files:
 - `src\MediaFileRenamer.App\Services\RenamePlanner.cs` - Plex/custom destination generation and path safety.
 - `src\MediaFileRenamer.App\Services\RenameApplier.cs` - move/copy, collision checks, and empty-folder cleanup.
 - `src\MediaFileRenamer.App\Services\OperationJournalService.cs` - durable operation history and undo.
+- `src\MediaFileRenamer.App\RecoveryWindow.xaml` and `.xaml.cs` - asynchronous interrupted-operation inspection, rollback, and resolution.
 - `src\MediaFileRenamer.App\Services\MetadataMatchService.cs` - unified TMDB/TVDB candidate aggregation.
 - `src\MediaFileRenamer.App\ViewModels\MediaPreviewItem.cs` - preview row state, including `MatchState`.
 
@@ -170,9 +171,12 @@ The test suite covers:
 - duplicate destinations;
 - companion-file association and naming;
 - transactional move/copy behavior, rollback, journals, and undo;
+- interrupted-operation detection and evidence-based recovery;
+- creation/last-write timestamp and safe Windows attribute preservation;
 - source-folder cleanup;
 - unresolved media blocking;
 - settings normalization and atomic save;
+- first-run onboarding state and default-operation persistence;
 - diagnostic redaction, provider connection tests, and WPF window startup.
 
 The review-gate tests cover the view model, WPF Apply state/count, offline local picker, whole-batch blocking, and mixed matched/manual batches. Matching tests cover PIN authentication, multiple episode orders, absolute and date-based lookup, exact-coordinate enforcement, caching, TVDB-only candidates, cross-provider aggregation, provider labeling, aliases, retries, and conflicting-title rejection.
@@ -182,6 +186,7 @@ The review-gate tests cover the view model, WPF Apply state/count, offline local
 GitHub Actions workflow: `.github\workflows\build.yml`
 
 - Pushes and pull requests to `main` run restore, formatting verification, warnings-as-errors build, tests, and NuGet auditing on `windows-latest`.
+- CI uses Microsoft Testing Platform's named `--solution` form and requires at least one discovered test, preventing a zero-test run from passing silently.
 - Successful pushes to `main` package a self-contained `win-x64` ZIP and SHA-256 file as a 30-day artifact.
 - A version tag such as `v0.1.0` creates a permanent GitHub Release with the ZIP and checksum.
 - Optional Authenticode signing is gated on both signing secrets being configured; unsigned builds remain supported.
@@ -191,7 +196,7 @@ GitHub Actions workflow: `.github\workflows\build.yml`
 
 1. Run the strict validation commands from `README.md`.
 2. Build the self-contained executable into a clean `dist` folder.
-3. Manually test provider credentials, one obvious match, one ambiguous match, a subtitle companion, cancellation/rollback, and undo.
+3. Generate disposable fixtures and complete `docs\ACCEPTANCE.md` against the exact packaged candidate, including recovery, timestamp, and UNC rows where network-share support is claimed.
 4. Commit with a focused message and push `main`; GitHub Actions will publish the development artifact.
 
 ## Safety Notes

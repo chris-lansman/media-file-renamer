@@ -8,6 +8,7 @@ obj/
 .appdata/
 dist/
 tmp/
+TestResults/
 
 # Personal metadata-provider credentials and machine-local settings.
 settings.json
