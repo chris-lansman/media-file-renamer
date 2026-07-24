@@ -15,13 +15,37 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        try
+        {
+            var options = AppStartupOptions.Parse(e.Args);
+            if (options.DataPaths is not null)
+            {
+                AppDataPaths.Configure(options.DataPaths);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            System.Windows.MessageBox.Show(
+                ex.Message,
+                "Invalid startup option",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(2);
+            return;
+        }
+
         DiagnosticLog.Current.Information("Application starting.");
         base.OnStartup(e);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        DiagnosticLog.Current.Information($"Application exiting with code {e.ApplicationExitCode}.");
+        if (DiagnosticLog.IsInitialized)
+        {
+            DiagnosticLog.Current.Information(
+                $"Application exiting with code {e.ApplicationExitCode}.");
+        }
+
         base.OnExit(e);
     }
 
@@ -29,7 +53,10 @@ public partial class App : System.Windows.Application
         object sender,
         DispatcherUnhandledExceptionEventArgs e)
     {
-        DiagnosticLog.Current.Error("An unhandled UI error occurred.", e.Exception);
+        if (DiagnosticLog.IsInitialized)
+        {
+            DiagnosticLog.Current.Error("An unhandled UI error occurred.", e.Exception);
+        }
         try
         {
             System.Windows.MessageBox.Show(
@@ -51,16 +78,25 @@ public partial class App : System.Windows.Application
 
     private static void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        DiagnosticLog.Current.Error(
-            "An unhandled application error occurred.",
-            e.ExceptionObject as Exception);
+        if (DiagnosticLog.IsInitialized)
+        {
+            DiagnosticLog.Current.Error(
+                "An unhandled application error occurred.",
+                e.ExceptionObject as Exception);
+        }
     }
 
     private static void OnUnobservedTaskException(
         object? sender,
         UnobservedTaskExceptionEventArgs e)
     {
-        DiagnosticLog.Current.Error("An unobserved background task error occurred.", e.Exception);
+        if (DiagnosticLog.IsInitialized)
+        {
+            DiagnosticLog.Current.Error(
+                "An unobserved background task error occurred.",
+                e.Exception);
+        }
+
         e.SetObserved();
     }
 }

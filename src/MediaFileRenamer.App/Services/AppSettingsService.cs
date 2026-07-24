@@ -36,10 +36,7 @@ public sealed class AppSettingsService
 
     public AppSettingsService(string? settingsPath = null)
     {
-        SettingsPath = settingsPath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MediaFileRenamer",
-            "settings.json");
+        SettingsPath = settingsPath ?? AppDataPaths.Current.SettingsPath;
     }
 
     public AppSettings Load()
