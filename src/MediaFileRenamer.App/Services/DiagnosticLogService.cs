@@ -35,10 +35,7 @@ public sealed partial class DiagnosticLogService
                 "At least one log file must be retained.");
         }
 
-        LogDirectory = logDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MediaFileRenamer",
-            "Logs");
+        LogDirectory = logDirectory ?? AppDataPaths.Current.LogDirectory;
         _maximumLogBytes = maximumLogBytes;
         _retainedLogCount = retainedLogCount;
     }
@@ -191,5 +188,9 @@ public sealed partial class DiagnosticLogService
 
 public static class DiagnosticLog
 {
-    public static DiagnosticLogService Current { get; } = new();
+    private static readonly Lazy<DiagnosticLogService> Instance =
+        new(() => new DiagnosticLogService(AppDataPaths.Current.LogDirectory));
+
+    public static DiagnosticLogService Current => Instance.Value;
+    public static bool IsInitialized => Instance.IsValueCreated;
 }
