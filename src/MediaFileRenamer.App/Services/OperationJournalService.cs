@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -11,15 +12,31 @@ public sealed class OperationJournalService
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() }
     };
+    private readonly IPathAvailabilityProbe _pathAvailabilityProbe;
+    private readonly IFileMoveOperation _fileMoveOperation;
 
     public string JournalDirectory { get; }
 
     public OperationJournalService(string? journalDirectory = null)
+        : this(journalDirectory, null, null)
     {
-        JournalDirectory = journalDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MediaFileRenamer",
-            "operations");
+    }
+
+    public OperationJournalService(
+        string? journalDirectory,
+        IPathAvailabilityProbe? pathAvailabilityProbe)
+        : this(journalDirectory, pathAvailabilityProbe, null)
+    {
+    }
+
+    public OperationJournalService(
+        string? journalDirectory,
+        IPathAvailabilityProbe? pathAvailabilityProbe,
+        IFileMoveOperation? fileMoveOperation)
+    {
+        JournalDirectory = journalDirectory ?? AppDataPaths.Current.OperationDirectory;
+        _pathAvailabilityProbe = pathAvailabilityProbe ?? new PathAvailabilityProbe();
+        _fileMoveOperation = fileMoveOperation ?? new FileMoveOperation();
     }
 
     internal ActiveOperationJournal Create(
@@ -39,6 +56,7 @@ public sealed class OperationJournalService
                 DestinationPath = transfer.DestinationPath,
                 IsCompanion = transfer.IsCompanion,
                 Length = transfer.Length,
+                DestinationSha256 = null,
                 Status = OperationJournalEntryStatus.Planned
             }).ToList()
         };
@@ -168,8 +186,7 @@ public sealed class OperationJournalService
 
                 foreach (var partialPath in entry.PartialPaths)
                 {
-                    if (File.Exists(partialPath)
-                        && IsPartialForDestination(partialPath, entry.DestinationPath))
+                    if (IsPartialForDestination(partialPath, entry.DestinationPath))
                     {
                         DeleteFilePreservingAttributesOnFailure(partialPath);
                         removedArtifacts++;
@@ -228,32 +245,10 @@ public sealed class OperationJournalService
                 continue;
             }
 
-            if (journal.Operation == FileOperation.Move)
+            var validationError = ValidateUndoEntry(entry, journal.Operation);
+            if (validationError is not null)
             {
-                if (!File.Exists(entry.DestinationPath))
-                {
-                    return new UndoResult(
-                        false,
-                        0,
-                        $"Cannot undo because a destination is missing: {entry.DestinationPath}");
-                }
-
-                if (File.Exists(entry.SourcePath))
-                {
-                    return new UndoResult(
-                        false,
-                        0,
-                        $"Cannot undo because the original path is occupied: {entry.SourcePath}");
-                }
-            }
-
-            if (File.Exists(entry.DestinationPath)
-                && new FileInfo(entry.DestinationPath).Length != entry.Length)
-            {
-                return new UndoResult(
-                    false,
-                    0,
-                    $"Cannot undo because a destination changed size: {entry.DestinationPath}");
+                return new UndoResult(false, 0, validationError);
             }
         }
 
@@ -267,12 +262,15 @@ public sealed class OperationJournalService
                     continue;
                 }
 
+                var validationError = ValidateUndoEntry(entry, journal.Operation);
+                if (validationError is not null)
+                {
+                    throw new IOException(validationError);
+                }
+
                 if (journal.Operation == FileOperation.Copy)
                 {
-                    if (File.Exists(entry.DestinationPath))
-                    {
-                        DeleteFilePreservingAttributesOnFailure(entry.DestinationPath);
-                    }
+                    DeleteFilePreservingAttributesOnFailure(entry.DestinationPath);
                 }
                 else
                 {
@@ -282,7 +280,7 @@ public sealed class OperationJournalService
                         Directory.CreateDirectory(sourceDirectory);
                     }
 
-                    File.Move(entry.DestinationPath, entry.SourcePath);
+                    MovePreservingMetadata(entry.DestinationPath, entry.SourcePath);
                 }
 
                 entry.Status = OperationJournalEntryStatus.Undone;
@@ -303,6 +301,95 @@ public sealed class OperationJournalService
                 false,
                 restored,
                 $"Undo stopped after {restored} file(s): {ex.Message}");
+        }
+    }
+
+    private string? ValidateUndoEntry(
+        OperationJournalEntry entry,
+        FileOperation operation)
+    {
+        var destinationState =
+            _pathAvailabilityProbe.GetFileState(entry.DestinationPath);
+        if (destinationState is FilePathState.Unavailable
+            or FilePathState.Indeterminate)
+        {
+            return "Cannot undo because the destination location is unavailable "
+                + $"or cannot be verified: {entry.DestinationPath}";
+        }
+
+        var sourceState = _pathAvailabilityProbe.GetFileState(entry.SourcePath);
+        if (sourceState is FilePathState.Unavailable
+            or FilePathState.Indeterminate)
+        {
+            return "Cannot undo because the source location is unavailable "
+                + $"or cannot be verified: {entry.SourcePath}";
+        }
+
+        if (destinationState == FilePathState.Missing)
+        {
+            return $"Cannot undo because a destination is missing: {entry.DestinationPath}";
+        }
+
+        if (operation == FileOperation.Move && sourceState == FilePathState.Exists)
+        {
+            return $"Cannot undo because the original path is occupied: {entry.SourcePath}";
+        }
+
+        if (operation == FileOperation.Copy && sourceState == FilePathState.Missing)
+        {
+            return $"Cannot undo because the original copy source is missing: {entry.SourcePath}";
+        }
+
+        if (new FileInfo(entry.DestinationPath).Length != entry.Length)
+        {
+            return $"Cannot undo because a destination changed size: {entry.DestinationPath}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(entry.DestinationSha256))
+        {
+            if (!FingerprintMatches(entry.DestinationPath, entry.DestinationSha256))
+            {
+                return $"Cannot undo because a destination changed content: "
+                    + entry.DestinationPath;
+            }
+
+            return null;
+        }
+
+        // Journals from releases before fingerprints can still safely undo a copy
+        // when the retained source proves that the destination is byte-identical.
+        if (operation == FileOperation.Copy
+            && FilesAreIdentical(entry.SourcePath, entry.DestinationPath))
+        {
+            return null;
+        }
+
+        return "Cannot safely undo because this older journal has no destination "
+            + $"fingerprint: {entry.DestinationPath}";
+    }
+
+    private static bool FingerprintMatches(string path, string expectedSha256)
+    {
+        if (expectedSha256.Length != 64)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                1024 * 1024,
+                FileOptions.SequentialScan);
+            var actual = Convert.ToHexString(SHA256.HashData(stream));
+            return actual.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
@@ -368,7 +455,7 @@ public sealed class OperationJournalService
             or OperationJournalStatus.InProgress
             or OperationJournalStatus.RollbackFailed;
 
-    private static InterruptedOperationRecovery Inspect(
+    private InterruptedOperationRecovery Inspect(
         string journalPath,
         OperationJournal journal)
     {
@@ -376,7 +463,8 @@ public sealed class OperationJournalService
             .Select(entry => InspectEntry(entry, journal.Operation))
             .ToList();
         var canRollback = entries.All(entry =>
-            entry.State != InterruptedEntryState.ManualReviewRequired);
+            entry.State is not InterruptedEntryState.ManualReviewRequired
+                and not InterruptedEntryState.PathUnavailable);
         var requiresVerification = entries.Any(entry =>
             entry.State == InterruptedEntryState.ContentVerificationRequired);
         var changedFiles = entries.Count(entry =>
@@ -418,14 +506,37 @@ public sealed class OperationJournalService
             entries);
     }
 
-    private static InterruptedOperationEntry InspectEntry(
+    private InterruptedOperationEntry InspectEntry(
         OperationJournalEntry entry,
         FileOperation operation)
     {
+        var sourceState = _pathAvailabilityProbe.GetFileState(entry.SourcePath);
+        var destinationState =
+            _pathAvailabilityProbe.GetFileState(entry.DestinationPath);
+        if (sourceState is FilePathState.Unavailable or FilePathState.Indeterminate
+            || destinationState is FilePathState.Unavailable
+                or FilePathState.Indeterminate)
+        {
+            return new InterruptedOperationEntry(
+                entry.SourcePath,
+                entry.DestinationPath,
+                entry.IsCompanion,
+                entry.Length,
+                entry.Status,
+                InterruptedEntryState.PathUnavailable,
+                false,
+                false,
+                null,
+                null,
+                [],
+                "A source or destination location is unavailable. "
+                + "Reconnect it before retrying recovery.");
+        }
+
         try
         {
-            var sourceExists = File.Exists(entry.SourcePath);
-            var destinationExists = File.Exists(entry.DestinationPath);
+            var sourceExists = sourceState == FilePathState.Exists;
+            var destinationExists = destinationState == FilePathState.Exists;
             var sourceLength = sourceExists
                 ? new FileInfo(entry.SourcePath).Length
                 : (long?)null;
@@ -480,8 +591,8 @@ public sealed class OperationJournalService
                 entry.Length,
                 entry.Status,
                 InterruptedEntryState.ManualReviewRequired,
-                File.Exists(entry.SourcePath),
-                File.Exists(entry.DestinationPath),
+                false,
+                false,
                 null,
                 null,
                 [],
@@ -543,16 +654,26 @@ public sealed class OperationJournalService
     private static IReadOnlyList<string> GetPartialPaths(string destinationPath)
     {
         var directory = Path.GetDirectoryName(destinationPath);
-        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        if (string.IsNullOrWhiteSpace(directory))
         {
             return [];
         }
 
         var prefix = Path.GetFileName(destinationPath) + ".mfr-partial-";
-        return Directory.EnumerateFiles(directory, prefix + "*", SearchOption.TopDirectoryOnly)
-            .Where(path => IsPartialForDestination(path, destinationPath))
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        try
+        {
+            return Directory.EnumerateFiles(
+                    directory,
+                    prefix + "*",
+                    SearchOption.TopDirectoryOnly)
+                .Where(path => IsPartialForDestination(path, destinationPath))
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return [];
+        }
     }
 
     private static bool IsPartialForDestination(string partialPath, string destinationPath)
@@ -617,15 +738,25 @@ public sealed class OperationJournalService
         }
     }
 
-    private static void RestoreMovedFile(InterruptedOperationEntry entry)
+    private void RestoreMovedFile(InterruptedOperationEntry entry)
     {
-        if (File.Exists(entry.SourcePath))
+        var sourceState = _pathAvailabilityProbe.GetFileState(entry.SourcePath);
+        if (sourceState is FilePathState.Unavailable or FilePathState.Indeterminate)
+        {
+            throw new IOException(
+                $"Cannot restore because the original location is unavailable: "
+                + entry.SourcePath);
+        }
+
+        if (sourceState == FilePathState.Exists)
         {
             throw new IOException(
                 $"Cannot restore because the original path is occupied: {entry.SourcePath}");
         }
 
-        if (!File.Exists(entry.DestinationPath)
+        var destinationState =
+            _pathAvailabilityProbe.GetFileState(entry.DestinationPath);
+        if (destinationState != FilePathState.Exists
             || new FileInfo(entry.DestinationPath).Length != entry.ExpectedLength)
         {
             throw new IOException(
@@ -638,7 +769,39 @@ public sealed class OperationJournalService
             Directory.CreateDirectory(sourceDirectory);
         }
 
-        File.Move(entry.DestinationPath, entry.SourcePath);
+        MovePreservingMetadata(entry.DestinationPath, entry.SourcePath);
+    }
+
+    private void MovePreservingMetadata(string sourcePath, string destinationPath)
+    {
+        var metadata = RestoredFileMetadata.CaptureBestEffort(sourcePath);
+        var clearedReadOnly = metadata.OriginalAttributes
+            ?.HasFlag(FileAttributes.ReadOnly) == true;
+        if (clearedReadOnly && metadata.OriginalAttributes is { } originalAttributes)
+        {
+            var writableAttributes = originalAttributes & ~FileAttributes.ReadOnly;
+            File.SetAttributes(
+                sourcePath,
+                writableAttributes == 0
+                    ? FileAttributes.Normal
+                    : writableAttributes);
+        }
+
+        try
+        {
+            _fileMoveOperation.Move(sourcePath, destinationPath);
+        }
+        catch
+        {
+            if (clearedReadOnly && File.Exists(sourcePath))
+            {
+                metadata.RestoreOriginalAttributesBestEffort(sourcePath);
+            }
+
+            throw;
+        }
+
+        metadata.ApplyBestEffort(destinationPath);
     }
 
     private static void DeleteVerifiedDuplicate(InterruptedOperationEntry entry)
@@ -725,6 +888,84 @@ public sealed class OperationJournalService
         string LoadPath,
         string SavePath,
         OperationJournal Journal);
+
+    private sealed record RestoredFileMetadata(
+        DateTime? CreationTimeUtc,
+        DateTime? LastWriteTimeUtc,
+        FileAttributes? OriginalAttributes)
+    {
+        private const FileAttributes PreservedAttributes =
+            FileAttributes.Archive
+            | FileAttributes.Hidden
+            | FileAttributes.ReadOnly;
+
+        public static RestoredFileMetadata CaptureBestEffort(string path)
+        {
+            DateTime? creationTimeUtc = null;
+            DateTime? lastWriteTimeUtc = null;
+            FileAttributes? originalAttributes = null;
+            TryOptional(() => creationTimeUtc = File.GetCreationTimeUtc(path));
+            TryOptional(() => lastWriteTimeUtc = File.GetLastWriteTimeUtc(path));
+            TryOptional(() => originalAttributes = File.GetAttributes(path));
+            return new RestoredFileMetadata(
+                creationTimeUtc,
+                lastWriteTimeUtc,
+                originalAttributes);
+        }
+
+        public void ApplyBestEffort(string path)
+        {
+            if (CreationTimeUtc is { } creationTimeUtc)
+            {
+                TryOptional(() => File.SetCreationTimeUtc(path, creationTimeUtc));
+            }
+
+            if (LastWriteTimeUtc is { } lastWriteTimeUtc)
+            {
+                TryOptional(() => File.SetLastWriteTimeUtc(path, lastWriteTimeUtc));
+            }
+
+            if (OriginalAttributes is { } originalAttributes)
+            {
+                TryOptional(() =>
+                {
+                    var currentAttributes = File.GetAttributes(path);
+                    var safeAttributes = originalAttributes & PreservedAttributes;
+                    var combinedAttributes =
+                        (currentAttributes & ~(PreservedAttributes | FileAttributes.Normal))
+                        | safeAttributes;
+                    File.SetAttributes(
+                        path,
+                        combinedAttributes == 0
+                            ? FileAttributes.Normal
+                            : combinedAttributes);
+                });
+            }
+        }
+
+        public void RestoreOriginalAttributesBestEffort(string path)
+        {
+            if (OriginalAttributes is { } originalAttributes)
+            {
+                TryOptional(() => File.SetAttributes(path, originalAttributes));
+            }
+        }
+
+        private static void TryOptional(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex) when (ex is IOException
+                                       or UnauthorizedAccessException
+                                       or ArgumentException)
+            {
+                // Optional filesystem metadata differs across SMB and virtual
+                // filesystems; content restoration remains the primary operation.
+            }
+        }
+    }
 }
 
 internal sealed class ActiveOperationJournal
@@ -753,9 +994,14 @@ internal sealed class ActiveOperationJournal
         Save();
     }
 
-    public void MarkCompleted(string source, string destination)
+    public void MarkCompleted(
+        string source,
+        string destination,
+        string? destinationSha256)
     {
-        Find(source, destination).Status = OperationJournalEntryStatus.Completed;
+        var entry = Find(source, destination);
+        entry.DestinationSha256 = destinationSha256;
+        entry.Status = OperationJournalEntryStatus.Completed;
         Save();
     }
 
@@ -772,9 +1018,12 @@ internal sealed class ActiveOperationJournal
         Save();
     }
 
-    public void MarkFailed(string error, IReadOnlyList<string> rollbackErrors)
+    public void MarkFailed(
+        string error,
+        IReadOnlyList<string> rollbackErrors,
+        bool recoveryRequired)
     {
-        _journal.Status = rollbackErrors.Count == 0
+        _journal.Status = rollbackErrors.Count == 0 && !recoveryRequired
             ? OperationJournalStatus.RolledBack
             : OperationJournalStatus.RollbackFailed;
         _journal.Error = error;
@@ -855,6 +1104,7 @@ public enum InterruptedEntryState
     DestinationContainsTransfer,
     ContentVerificationRequired,
     AlreadyRestored,
+    PathUnavailable,
     ManualReviewRequired
 }
 
@@ -897,5 +1147,6 @@ internal sealed class OperationJournalEntry
     public string DestinationPath { get; set; } = "";
     public bool IsCompanion { get; set; }
     public long Length { get; set; }
+    public string? DestinationSha256 { get; set; }
     public OperationJournalEntryStatus Status { get; set; }
 }

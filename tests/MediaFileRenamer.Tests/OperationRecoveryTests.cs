@@ -134,6 +134,62 @@ public sealed class OperationRecoveryTests
     }
 
     [TestMethod]
+    public void RollbackInterruptedMove_RestoresMetadataAfterCrossVolumeStyleMove()
+    {
+        using var temp = new TempDirectory();
+        var journals = temp.CreateDirectory("Journals");
+        var source = Path.Combine(temp.Path, "Source", "Movie.mkv");
+        var destination = temp.CreateFile(
+            Path.Combine("Output", "Renamed.mkv"),
+            "video");
+        var creationTimeUtc = new DateTime(2017, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        var lastWriteTimeUtc = new DateTime(2018, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        File.SetCreationTimeUtc(destination, creationTimeUtc);
+        File.SetLastWriteTimeUtc(destination, lastWriteTimeUtc);
+        File.SetAttributes(
+            destination,
+            FileAttributes.Archive
+            | FileAttributes.Hidden
+            | FileAttributes.ReadOnly);
+        var operationId = WriteJournal(
+            journals,
+            FileOperation.Move,
+            OperationJournalStatus.InProgress,
+            [
+                Entry(
+                    source,
+                    destination,
+                    5,
+                    OperationJournalEntryStatus.InProgress)
+            ]);
+        var service = new OperationJournalService(
+            journals,
+            null,
+            new TimestampResettingFileMove());
+
+        try
+        {
+            var result = service.RecoverInterrupted(
+                operationId,
+                InterruptedOperationAction.Rollback);
+
+            Assert.IsTrue(result.Success, result.Message);
+            Assert.IsTrue(File.Exists(source));
+            Assert.IsFalse(File.Exists(destination));
+            Assert.AreEqual(creationTimeUtc, File.GetCreationTimeUtc(source));
+            Assert.AreEqual(lastWriteTimeUtc, File.GetLastWriteTimeUtc(source));
+            const FileAttributes expected =
+                FileAttributes.Archive | FileAttributes.Hidden | FileAttributes.ReadOnly;
+            Assert.AreEqual(expected, File.GetAttributes(source) & expected);
+        }
+        finally
+        {
+            ClearReadOnly(source);
+            ClearReadOnly(destination);
+        }
+    }
+
+    [TestMethod]
     public void RollbackInterrupted_RemovesIdenticalReadOnlyCopyDestination()
     {
         using var temp = new TempDirectory();
@@ -209,6 +265,61 @@ public sealed class OperationRecoveryTests
                     File.GetAttributes(source) & ~FileAttributes.ReadOnly);
             }
         }
+    }
+
+    [TestMethod]
+    public void UndoLegacyCopy_AllowsByteIdenticalRetainedSource()
+    {
+        using var temp = new TempDirectory();
+        var journals = temp.CreateDirectory("Journals");
+        var source = temp.CreateFile("Source.mkv", "video");
+        var destination = temp.CreateFile("Destination.mkv", "video");
+        WriteJournal(
+            journals,
+            FileOperation.Copy,
+            OperationJournalStatus.Completed,
+            [
+                Entry(
+                    source,
+                    destination,
+                    5,
+                    OperationJournalEntryStatus.Completed)
+            ]);
+        var service = new OperationJournalService(journals);
+
+        var result = service.UndoLastCompleted();
+
+        Assert.IsTrue(result.Success, result.Message);
+        Assert.IsTrue(File.Exists(source));
+        Assert.IsFalse(File.Exists(destination));
+    }
+
+    [TestMethod]
+    public void UndoLegacyMove_RefusesWithoutDestinationFingerprint()
+    {
+        using var temp = new TempDirectory();
+        var journals = temp.CreateDirectory("Journals");
+        var source = Path.Combine(temp.Path, "Source.mkv");
+        var destination = temp.CreateFile("Destination.mkv", "video");
+        WriteJournal(
+            journals,
+            FileOperation.Move,
+            OperationJournalStatus.Completed,
+            [
+                Entry(
+                    source,
+                    destination,
+                    5,
+                    OperationJournalEntryStatus.Completed)
+            ]);
+        var service = new OperationJournalService(journals);
+
+        var result = service.UndoLastCompleted();
+
+        Assert.IsFalse(result.Success);
+        StringAssert.Contains(result.Message, "older journal");
+        Assert.IsFalse(File.Exists(source));
+        Assert.AreEqual("video", File.ReadAllText(destination));
     }
 
     [TestMethod]
@@ -342,6 +453,84 @@ public sealed class OperationRecoveryTests
             service.GetHistory().Single().Status);
     }
 
+    [TestMethod]
+    public void InspectInterruptedOperation_BlocksUnavailableDestinationRoot()
+    {
+        using var temp = new TempDirectory();
+        var journals = temp.CreateDirectory("Journals");
+        var source = temp.CreateFile("Source.mkv", "video");
+        var destination = Path.Combine(temp.Path, "Unavailable", "Destination.mkv");
+        var operationId = WriteJournal(
+            journals,
+            FileOperation.Copy,
+            OperationJournalStatus.InProgress,
+            [
+                Entry(
+                    source,
+                    destination,
+                    5,
+                    OperationJournalEntryStatus.InProgress)
+            ]);
+        var service = new OperationJournalService(
+            journals,
+            new SelectiveAvailabilityProbe(destination));
+
+        var recovery = service.GetInterruptedOperations().Single();
+        var result = service.RecoverInterrupted(
+            operationId,
+            InterruptedOperationAction.Rollback);
+
+        Assert.IsFalse(recovery.CanRollback);
+        Assert.AreEqual(
+            InterruptedOperationAssessment.ManualReviewRequired,
+            recovery.Assessment);
+        Assert.AreEqual(
+            InterruptedEntryState.PathUnavailable,
+            recovery.Entries.Single().State);
+        Assert.IsFalse(result.Success);
+        Assert.IsTrue(File.Exists(source));
+        Assert.IsFalse(File.Exists(destination));
+        Assert.AreEqual(
+            OperationJournalStatus.InProgress,
+            service.GetHistory().Single().Status);
+    }
+
+    [TestMethod]
+    public void Undo_BlocksUnavailableDestinationWithoutTerminalizingJournal()
+    {
+        using var temp = new TempDirectory();
+        var journalDirectory = temp.CreateDirectory("Journals");
+        var source = temp.CreateFile("Source.mkv", "video");
+        var destination = Path.Combine(temp.Path, "Output", "Destination.mkv");
+        var initialService = new OperationJournalService(journalDirectory);
+        var item = new MediaFileRenamer.App.ViewModels.MediaPreviewItem
+        {
+            SourcePath = source,
+            Extension = ".mkv",
+            MediaType = "Movie",
+            MatchedTitle = "Movie",
+            DestinationPath = destination,
+            Status = "TMDB match"
+        };
+        var applied = new RenameApplier(initialService).Apply(
+            [item],
+            FileOperation.Copy);
+        Assert.HasCount(1, applied.CompletedItems);
+        var unavailableService = new OperationJournalService(
+            journalDirectory,
+            new SelectiveAvailabilityProbe(destination));
+
+        var result = unavailableService.UndoLastCompleted();
+
+        Assert.IsFalse(result.Success);
+        StringAssert.Contains(result.Message, "unavailable");
+        Assert.IsTrue(File.Exists(source));
+        Assert.IsTrue(File.Exists(destination));
+        Assert.AreEqual(
+            OperationJournalStatus.Completed,
+            unavailableService.GetHistory().Single().Status);
+    }
+
     private static object Entry(
         string sourcePath,
         string destinationPath,
@@ -378,5 +567,39 @@ public sealed class OperationRecoveryTests
         var path = Path.Combine(journalDirectory, $"{id:N}{suffix}");
         File.WriteAllText(path, JsonSerializer.Serialize(journal, JsonOptions));
         return id;
+    }
+
+    private sealed class SelectiveAvailabilityProbe(string unavailablePath)
+        : IPathAvailabilityProbe
+    {
+        public PathAvailability GetRootAvailability(string path) =>
+            path.Equals(unavailablePath, StringComparison.OrdinalIgnoreCase)
+                ? PathAvailability.Unavailable
+                : PathAvailability.Available;
+    }
+
+    private static void ClearReadOnly(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var attributes = File.GetAttributes(path) & ~FileAttributes.ReadOnly;
+        File.SetAttributes(
+            path,
+            attributes == 0 ? FileAttributes.Normal : attributes);
+    }
+
+    private sealed class TimestampResettingFileMove : IFileMoveOperation
+    {
+        public void Move(string sourcePath, string destinationPath)
+        {
+            File.Move(sourcePath, destinationPath);
+            File.SetCreationTimeUtc(
+                destinationPath,
+                new DateTime(2035, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+            File.SetAttributes(destinationPath, FileAttributes.Normal);
+        }
     }
 }
