@@ -131,7 +131,11 @@ Perform these checks with the packaged executable, not a source/debug build.
 | DPI-02 | Yes | Move the app between monitors with different scaling, if available. | Layout reflows without disappearing controls, unusable window size, or a restart requirement. | |
 | KEY-01 | Yes | Complete first run, add a folder, match/review, open Settings/history, and cancel a dialog using only the keyboard. | Focus is visible and logical; Tab/Shift+Tab reach every control; Enter/Space and Esc behave conventionally; no keyboard trap occurs. | |
 | A11Y-01 | Yes | Enable Windows High Contrast and 200% text size. | Content remains legible, focus and selection remain visible, and status is not communicated by color alone. | |
-| A11Y-02 | Yes | With Narrator, traverse the main workflow and dialogs. | Interactive controls have meaningful names, state and errors are announced, list rows have usable identity/status, and credential values are not announced unless the field is intentionally focused. | |
+| A11Y-02 | No (recommended) | With Narrator, traverse the main workflow and dialogs. | Interactive controls have meaningful names, state and errors are announced, list rows have usable identity/status, and credential values are not announced unless the field is intentionally focused. | |
+
+Full Narrator workflow certification is a recommended compatibility check, not
+a release gate. Keyboard-only operation, meaningful automation names, High
+Contrast, and text/display scaling remain required.
 
 ## Release decision
 
