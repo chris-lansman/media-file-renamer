@@ -146,6 +146,47 @@ public sealed class TransactionalRenameTests
     }
 
     [TestMethod]
+    public void UndoMove_RestoresMetadataAfterCrossVolumeStyleMove()
+    {
+        using var temp = new TempDirectory();
+        var source = temp.CreateFile(Path.Combine("Source", "Movie.mkv"), "video");
+        var destination = Path.Combine(temp.Path, "Output", "Renamed Movie.mkv");
+        var creationTimeUtc = new DateTime(2018, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        var lastWriteTimeUtc = new DateTime(2019, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        SetMetadata(source, creationTimeUtc, lastWriteTimeUtc);
+        var journalDirectory = temp.CreateDirectory("Journals");
+        var journals = new OperationJournalService(journalDirectory);
+
+        try
+        {
+            var applied = new RenameApplier(journals).Apply(
+                [Item(source, destination)],
+                FileOperation.Move);
+            Assert.HasCount(1, applied.CompletedItems);
+            var undoService = new OperationJournalService(
+                journalDirectory,
+                null,
+                new TimestampResettingFileMove());
+
+            var undo = undoService.UndoLastCompleted();
+
+            Assert.IsTrue(undo.Success, undo.Message);
+            Assert.IsTrue(File.Exists(source));
+            Assert.IsFalse(File.Exists(destination));
+            Assert.AreEqual(creationTimeUtc, File.GetCreationTimeUtc(source));
+            Assert.AreEqual(lastWriteTimeUtc, File.GetLastWriteTimeUtc(source));
+            const FileAttributes expected =
+                FileAttributes.Archive | FileAttributes.Hidden | FileAttributes.ReadOnly;
+            Assert.AreEqual(expected, File.GetAttributes(source) & expected);
+        }
+        finally
+        {
+            ClearReadOnly(source);
+            ClearReadOnly(destination);
+        }
+    }
+
+    [TestMethod]
     public async Task Copy_FailureAfterFirstTransferRollsBackCreatedDestination()
     {
         using var temp = new TempDirectory();
@@ -183,6 +224,40 @@ public sealed class TransactionalRenameTests
             ClearReadOnly(source);
             ClearReadOnly(destination);
         }
+    }
+
+    [TestMethod]
+    public async Task Copy_UnprovenPartialCleanupKeepsJournalRetryable()
+    {
+        using var temp = new TempDirectory();
+        var source = temp.CreateFile("Movie.mkv", "video");
+        var destination = Path.Combine(temp.Path, "Output", "Renamed.mkv");
+        var journals = new OperationJournalService(
+            temp.CreateDirectory("Journals"));
+        var progress = new InlineProgress<FileTransferProgress>(
+            _ => throw new IOException("simulated network interruption"));
+        var applier = new RenameApplier(
+            journals,
+            null,
+            new FailingTransferCleanup());
+
+        var result = await applier.ApplyAsync(
+            [Item(source, destination)],
+            FileOperation.Copy,
+            progress);
+
+        Assert.IsFalse(result.RolledBack);
+        StringAssert.Contains(result.FailureMessage, "Recovery is required");
+        Assert.AreEqual(
+            OperationJournalStatus.RollbackFailed,
+            journals.GetHistory().Single().Status);
+        var recovery = journals.GetInterruptedOperations().Single();
+        Assert.AreEqual(1, recovery.PartialArtifactCount);
+        Assert.AreEqual(
+            InterruptedEntryState.PartialArtifactOnly,
+            recovery.Entries.Single().State);
+        Assert.IsTrue(File.Exists(source));
+        Assert.IsFalse(File.Exists(destination));
     }
 
     [TestMethod]
@@ -236,6 +311,50 @@ public sealed class TransactionalRenameTests
         Assert.AreEqual(
             "replacement with a different size",
             File.ReadAllText(destination));
+    }
+
+    [TestMethod]
+    public void Undo_RefusesToDeleteSameLengthChangedCopyDestination()
+    {
+        using var temp = new TempDirectory();
+        var source = temp.CreateFile("Movie.mkv", "video");
+        var destination = Path.Combine(temp.Path, "Output", "Renamed.mkv");
+        var journals = new OperationJournalService(
+            temp.CreateDirectory("Journals"));
+        var applied = new RenameApplier(journals).Apply(
+            [Item(source, destination)],
+            FileOperation.Copy);
+        Assert.HasCount(1, applied.CompletedItems);
+        File.WriteAllText(destination, "other");
+
+        var undo = journals.UndoLastCompleted();
+
+        Assert.IsFalse(undo.Success);
+        StringAssert.Contains(undo.Message, "changed content");
+        Assert.AreEqual("video", File.ReadAllText(source));
+        Assert.AreEqual("other", File.ReadAllText(destination));
+    }
+
+    [TestMethod]
+    public void Undo_RefusesToMoveBackSameLengthChangedDestination()
+    {
+        using var temp = new TempDirectory();
+        var source = temp.CreateFile("Movie.mkv", "video");
+        var destination = Path.Combine(temp.Path, "Output", "Renamed.mkv");
+        var journals = new OperationJournalService(
+            temp.CreateDirectory("Journals"));
+        var applied = new RenameApplier(journals).Apply(
+            [Item(source, destination)],
+            FileOperation.Move);
+        Assert.HasCount(1, applied.CompletedItems);
+        File.WriteAllText(destination, "other");
+
+        var undo = journals.UndoLastCompleted();
+
+        Assert.IsFalse(undo.Success);
+        StringAssert.Contains(undo.Message, "changed content");
+        Assert.IsFalse(File.Exists(source));
+        Assert.AreEqual("other", File.ReadAllText(destination));
     }
 
     [TestMethod]
@@ -316,5 +435,23 @@ public sealed class TransactionalRenameTests
     private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T>
     {
         public void Report(T value) => callback(value);
+    }
+
+    private sealed class FailingTransferCleanup : ITransferCleanup
+    {
+        public void Delete(string path) =>
+            throw new IOException("simulated unavailable destination");
+    }
+
+    private sealed class TimestampResettingFileMove : IFileMoveOperation
+    {
+        public void Move(string sourcePath, string destinationPath)
+        {
+            File.Move(sourcePath, destinationPath);
+            File.SetCreationTimeUtc(
+                destinationPath,
+                new DateTime(2035, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+            File.SetAttributes(destinationPath, FileAttributes.Normal);
+        }
     }
 }

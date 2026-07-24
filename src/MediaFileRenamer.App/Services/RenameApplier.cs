@@ -1,5 +1,6 @@
 using MediaFileRenamer.App.ViewModels;
 using System.IO;
+using System.Security.Cryptography;
 
 namespace MediaFileRenamer.App.Services;
 
@@ -21,10 +22,22 @@ public sealed class RenameApplier
     private const int CopyBufferSize = 1024 * 1024;
     private readonly RenamePlanner _planner = new();
     private readonly OperationJournalService? _journals;
+    private readonly IPathAvailabilityProbe _pathAvailabilityProbe;
+    private readonly ITransferCleanup _transferCleanup;
 
     public RenameApplier(OperationJournalService? journals = null)
+        : this(journals, null, null)
+    {
+    }
+
+    public RenameApplier(
+        OperationJournalService? journals,
+        IPathAvailabilityProbe? pathAvailabilityProbe,
+        ITransferCleanup? transferCleanup)
     {
         _journals = journals;
+        _pathAvailabilityProbe = pathAvailabilityProbe ?? new PathAvailabilityProbe();
+        _transferCleanup = transferCleanup ?? new TransferCleanup();
     }
 
     public RenameResult Apply(IEnumerable<MediaPreviewItem> items, FileOperation operation)
@@ -81,15 +94,20 @@ public sealed class RenameApplier
                             totalBytes));
                     });
 
-                await ExecuteTransferAsync(
+                var destinationSha256 = await ExecuteTransferAsync(
                     transfer,
                     operation,
                     transferProgress,
-                    cancellationToken);
+                    cancellationToken,
+                    captureFingerprint: journal is not null,
+                    transferCleanup: _transferCleanup);
 
                 bytesTransferred += transfer.Length;
                 completedTransfers.Add(transfer);
-                journal?.MarkCompleted(transfer.SourcePath, transfer.DestinationPath);
+                journal?.MarkCompleted(
+                    transfer.SourcePath,
+                    transfer.DestinationPath,
+                    destinationSha256);
                 progress?.Report(new FileTransferProgress(
                     index + 1,
                     preflight.Transfers.Count,
@@ -100,19 +118,28 @@ public sealed class RenameApplier
         }
         catch (Exception ex) when (ex is not StackOverflowException and not OutOfMemoryException)
         {
-            var rollbackErrors = Rollback(completedTransfers, operation, journal);
-            var error = ex is OperationCanceledException
+            var rollbackErrors = Rollback(
+                completedTransfers,
+                operation,
+                journal,
+                _pathAvailabilityProbe);
+            var transferFailure = ex is TransferStateUncertainException uncertain
+                ? uncertain.TransferFailure
+                : ex;
+            var recoveryRequired = ex is TransferStateUncertainException;
+            var error = transferFailure is OperationCanceledException
                 ? "Operation canceled; completed transfers were rolled back."
-                : $"Transfer failed and the batch was rolled back: {ex.Message}";
-            if (rollbackErrors.Count > 0)
+                : $"Transfer failed and the batch was rolled back: {transferFailure.Message}";
+            if (rollbackErrors.Count > 0 || recoveryRequired)
             {
-                error += $" Manual recovery is required for {rollbackErrors.Count} file(s).";
+                var affectedFiles = rollbackErrors.Count + (recoveryRequired ? 1 : 0);
+                error += $" Recovery is required for {affectedFiles} file(s).";
             }
 
-            journal?.MarkFailed(error, rollbackErrors);
+            journal?.MarkFailed(error, rollbackErrors, recoveryRequired);
             foreach (var item in itemList)
             {
-                item.Status = rollbackErrors.Count == 0
+                item.Status = rollbackErrors.Count == 0 && !recoveryRequired
                     ? "Rolled back; no batch changes kept"
                     : "Failed: rollback incomplete; open operation history";
             }
@@ -121,7 +148,7 @@ public sealed class RenameApplier
                 0,
                 [],
                 journal?.Path,
-                RolledBack: rollbackErrors.Count == 0,
+                RolledBack: rollbackErrors.Count == 0 && !recoveryRequired,
                 FailureMessage: error);
         }
 
@@ -377,11 +404,13 @@ public sealed class RenameApplier
         return null;
     }
 
-    private static async Task ExecuteTransferAsync(
+    private static async Task<string?> ExecuteTransferAsync(
         PlannedTransfer transfer,
         FileOperation operation,
         IProgress<long>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool captureFingerprint,
+        ITransferCleanup transferCleanup)
     {
         var destinationDirectory = Path.GetDirectoryName(transfer.DestinationPath)!;
         Directory.CreateDirectory(destinationDirectory);
@@ -389,17 +418,30 @@ public sealed class RenameApplier
         if (operation == FileOperation.Move
             && IsSameVolume(transfer.SourcePath, transfer.DestinationPath))
         {
-            File.Move(transfer.SourcePath, transfer.DestinationPath);
-            progress?.Report(transfer.Length);
-            return;
+            try
+            {
+                File.Move(transfer.SourcePath, transfer.DestinationPath);
+                progress?.Report(transfer.Length);
+                return captureFingerprint
+                    ? ComputeSha256(transfer.DestinationPath)
+                    : null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new TransferStateUncertainException(
+                    transfer.DestinationPath,
+                    ex);
+            }
         }
 
         var metadata = FileMetadataSnapshot.CaptureBestEffort(transfer.SourcePath);
-        await CopyVerifiedAsync(
+        var destinationSha256 = await CopyVerifiedAsync(
             transfer.SourcePath,
             transfer.DestinationPath,
             progress,
-            cancellationToken);
+            cancellationToken,
+            captureFingerprint,
+            transferCleanup);
 
         if (operation == FileOperation.Move)
         {
@@ -407,23 +449,43 @@ public sealed class RenameApplier
             {
                 DeleteFile(transfer.SourcePath);
             }
-            catch
+            catch (Exception transferFailure) when (transferFailure is IOException
+                                                    or UnauthorizedAccessException)
             {
-                File.Delete(transfer.DestinationPath);
+                try
+                {
+                    transferCleanup.Delete(transfer.DestinationPath);
+                }
+                catch (Exception cleanupFailure) when (cleanupFailure is IOException
+                                                       or UnauthorizedAccessException)
+                {
+                    throw new TransferStateUncertainException(
+                        transfer.DestinationPath,
+                        transferFailure,
+                        cleanupFailure);
+                }
+
                 throw;
             }
         }
 
         metadata.ApplyBestEffort(transfer.DestinationPath);
+        return destinationSha256;
     }
 
-    private static async Task CopyVerifiedAsync(
+    private static async Task<string?> CopyVerifiedAsync(
         string source,
         string destination,
         IProgress<long>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool captureFingerprint,
+        ITransferCleanup transferCleanup)
     {
         var temporary = destination + $".mfr-partial-{Guid.NewGuid():N}";
+        using var fingerprint = captureFingerprint
+            ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256)
+            : null;
+        Exception? transferFailure = null;
         try
         {
             await using var input = new FileStream(
@@ -447,6 +509,7 @@ public sealed class RenameApplier
             while ((read = await input.ReadAsync(buffer, cancellationToken)) > 0)
             {
                 await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                fingerprint?.AppendData(buffer, 0, read);
                 copied += read;
                 progress?.Report(copied);
             }
@@ -460,36 +523,83 @@ public sealed class RenameApplier
 
             output.Close();
             File.Move(temporary, destination);
+            return fingerprint is null
+                ? null
+                : Convert.ToHexString(fingerprint.GetHashAndReset());
+        }
+        catch (Exception ex)
+        {
+            transferFailure = ex;
+            throw;
         }
         finally
         {
-            if (File.Exists(temporary))
+            try
             {
-                File.Delete(temporary);
+                transferCleanup.Delete(temporary);
+            }
+            catch (Exception cleanupFailure) when (cleanupFailure is IOException
+                                                   or UnauthorizedAccessException)
+            {
+                throw new TransferStateUncertainException(
+                    temporary,
+                    transferFailure ?? cleanupFailure,
+                    cleanupFailure);
             }
         }
+    }
+
+    private static string ComputeSha256(string path)
+    {
+        using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            CopyBufferSize,
+            FileOptions.SequentialScan);
+        return Convert.ToHexString(SHA256.HashData(stream));
     }
 
     private static List<string> Rollback(
         IEnumerable<PlannedTransfer> completedTransfers,
         FileOperation operation,
-        ActiveOperationJournal? journal)
+        ActiveOperationJournal? journal,
+        IPathAvailabilityProbe pathAvailabilityProbe)
     {
         var errors = new List<string>();
         foreach (var transfer in completedTransfers.Reverse())
         {
             try
             {
+                var destinationState =
+                    pathAvailabilityProbe.GetFileState(transfer.DestinationPath);
+                if (destinationState is FilePathState.Unavailable
+                    or FilePathState.Indeterminate)
+                {
+                    throw new IOException(
+                        $"Destination location is unavailable: {transfer.DestinationPath}");
+                }
+
                 if (operation == FileOperation.Copy)
                 {
-                    if (File.Exists(transfer.DestinationPath))
+                    if (destinationState == FilePathState.Exists)
                     {
                         DeleteFile(transfer.DestinationPath);
                     }
                 }
-                else if (File.Exists(transfer.DestinationPath))
+                else if (destinationState == FilePathState.Exists)
                 {
-                    if (File.Exists(transfer.SourcePath))
+                    var sourceState =
+                        pathAvailabilityProbe.GetFileState(transfer.SourcePath);
+                    if (sourceState is FilePathState.Unavailable
+                        or FilePathState.Indeterminate)
+                    {
+                        throw new IOException(
+                            $"Source location is unavailable: {transfer.SourcePath}");
+                    }
+
+                    if (sourceState == FilePathState.Exists)
                     {
                         throw new IOException(
                             $"Cannot restore {transfer.SourcePath}; it already exists.");
@@ -513,6 +623,26 @@ public sealed class RenameApplier
         }
 
         return errors;
+    }
+
+    private sealed class TransferStateUncertainException : IOException
+    {
+        public Exception TransferFailure { get; }
+
+        public TransferStateUncertainException(
+            string path,
+            Exception transferFailure,
+            Exception? cleanupFailure = null)
+            : base(
+                cleanupFailure is null
+                    ? $"The transfer state could not be proven for {path}: "
+                        + transferFailure.Message
+                    : $"Cleanup could not be proven for {path}: "
+                        + cleanupFailure.Message,
+                cleanupFailure ?? transferFailure)
+        {
+            TransferFailure = transferFailure;
+        }
     }
 
     private static void DeleteFile(string path)
