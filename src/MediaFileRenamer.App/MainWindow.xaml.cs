@@ -50,6 +50,11 @@ public partial class MainWindow : Window
     protected override void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
+        if (_journalService.GetInterruptedOperations().Count > 0)
+        {
+            ShowRecoveryCenter();
+        }
+
         if (!_showFirstRun || _firstRunPromptShown)
         {
             return;
@@ -485,6 +490,24 @@ public partial class MainWindow : Window
             Owner = this
         };
         window.ShowDialog();
+    }
+
+    private void RecoveryCenterMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ShowRecoveryCenter();
+    }
+
+    private void ShowRecoveryCenter()
+    {
+        var window = new RecoveryWindow(_journalService)
+        {
+            Owner = this
+        };
+        window.ShowDialog();
+        if (_journalService.GetInterruptedOperations().Count == 0)
+        {
+            StatusTextBlock.Text = "Interrupted operations have been reviewed.";
+        }
     }
 
     private void AboutMenuItem_Click(object sender, RoutedEventArgs e)
