@@ -37,7 +37,7 @@ public partial class SettingsWindow : Window
         Settings.UseTvdbFallback = UseTvdbFallbackCheckBox.IsChecked == true;
         Settings.AutoMatchConfidencePercent = ParseConfidence(AutoMatchConfidenceTextBox.Text);
         Settings.DefaultOutputFolder = string.IsNullOrWhiteSpace(DefaultOutputFolderTextBox.Text)
-            ? @"C:\Users\cclan\renamed-media"
+            ? AppSettings.GetDefaultOutputFolder()
             : DefaultOutputFolderTextBox.Text.Trim();
         DialogResult = true;
     }

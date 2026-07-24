@@ -8,7 +8,8 @@ public sealed partial class MediaScanner
 {
     private static readonly HashSet<string> MediaExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".ts", ".mpeg", ".mpg"
+        ".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".ts", ".mpeg", ".mpg",
+        ".m2ts", ".mts", ".webm", ".vob"
     };
 
     public IReadOnlyList<MediaPreviewItem> Scan(IEnumerable<string> paths)
@@ -49,7 +50,13 @@ public sealed partial class MediaScanner
             yield break;
         }
 
-        foreach (var file in Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories)
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+        foreach (var file in Directory.EnumerateFiles(path, "*.*", options)
                      .Where(file => MediaExtensions.Contains(Path.GetExtension(file))))
         {
             yield return new ScannedFile(file, GetGroupPath(file));

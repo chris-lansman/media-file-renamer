@@ -1,5 +1,4 @@
 using MediaFileRenamer.App.ViewModels;
-using System.Collections.ObjectModel;
 using System.IO;
 
 namespace MediaFileRenamer.App.Services;
@@ -12,12 +11,19 @@ public enum FileOperation
 
 public sealed class RenameApplier
 {
-    public RenameResult Apply(ObservableCollection<MediaPreviewItem> items, FileOperation operation)
+    public RenameResult Apply(IEnumerable<MediaPreviewItem> items, FileOperation operation)
     {
+        var itemList = items.ToList();
         var sourceDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var completedItems = new List<MediaPreviewItem>();
+        var duplicateDestinations = itemList
+            .Where(item => !string.IsNullOrWhiteSpace(item.DestinationPath))
+            .GroupBy(item => Path.GetFullPath(item.DestinationPath), StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in items)
+        foreach (var item in itemList)
         {
             try
             {
@@ -27,7 +33,40 @@ public sealed class RenameApplier
                     continue;
                 }
 
-                var destinationDirectory = Path.GetDirectoryName(item.DestinationPath);
+                if (!File.Exists(item.SourcePath))
+                {
+                    item.Status = "Failed: source file no longer exists";
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(item.DestinationPath))
+                {
+                    item.Status = "Invalid destination";
+                    continue;
+                }
+
+                var source = Path.GetFullPath(item.SourcePath);
+                var destination = Path.GetFullPath(item.DestinationPath);
+                if (duplicateDestinations.Contains(destination))
+                {
+                    item.Status = "Failed: another item has the same destination";
+                    continue;
+                }
+
+                if (string.Equals(source, destination, StringComparison.OrdinalIgnoreCase))
+                {
+                    item.Status = "Already named";
+                    completedItems.Add(item);
+                    continue;
+                }
+
+                if (File.Exists(destination))
+                {
+                    item.Status = "Failed: destination file already exists";
+                    continue;
+                }
+
+                var destinationDirectory = Path.GetDirectoryName(destination);
                 if (string.IsNullOrWhiteSpace(destinationDirectory))
                 {
                     item.Status = "Invalid destination";
@@ -35,7 +74,6 @@ public sealed class RenameApplier
                 }
 
                 Directory.CreateDirectory(destinationDirectory);
-                var destination = ResolveConflict(item.DestinationPath);
 
                 if (operation == FileOperation.Move)
                 {
@@ -66,29 +104,6 @@ public sealed class RenameApplier
             : 0;
 
         return new RenameResult(deletedFolders, completedItems);
-    }
-
-    private static string ResolveConflict(string destination)
-    {
-        if (!File.Exists(destination))
-        {
-            return destination;
-        }
-
-        var directory = Path.GetDirectoryName(destination) ?? "";
-        var name = Path.GetFileNameWithoutExtension(destination);
-        var extension = Path.GetExtension(destination);
-
-        for (var i = 2; i < 10_000; i++)
-        {
-            var candidate = Path.Combine(directory, $"{name} ({i}){extension}");
-            if (!File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        throw new IOException("Could not find a free filename.");
     }
 
     private static int DeleteEmptySourceFolders(IEnumerable<string> sourceDirectories)
@@ -132,14 +147,25 @@ public sealed class RenameApplier
         // download folder busy immediately after the final file is moved.
         for (var attempt = 0; attempt < 4; attempt++)
         {
-            if (!Directory.Exists(directory) || Directory.EnumerateFileSystemEntries(directory).Any())
+            if (!Directory.Exists(directory))
             {
                 return false;
             }
 
+            var entries = Directory.EnumerateFileSystemEntries(directory, "*", SearchOption.AllDirectories);
+            foreach (var entry in entries)
+            {
+                var attributes = File.GetAttributes(entry);
+                if (!attributes.HasFlag(FileAttributes.Directory)
+                    || attributes.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    return false;
+                }
+            }
+
             try
             {
-                Directory.Delete(directory);
+                Directory.Delete(directory, recursive: true);
                 return true;
             }
             catch (IOException) when (attempt < 3)

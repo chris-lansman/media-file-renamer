@@ -96,7 +96,7 @@ public partial class MainWindow : Window
                 }
             }
 
-            item.DestinationPath = _planner.BuildDestination(item, OutputFolderTextBox.Text, GetPreset(), CustomFormatTextBox.Text);
+            UpdateDestination(item);
         }
 
         StatusTextBlock.Text = $"Ready: {PreviewItems.Count} item(s) matched/planned.";
@@ -125,7 +125,7 @@ public partial class MainWindow : Window
             await ApplyTvShowIdentityToRelatedItemsAsync(client, item, selected);
         }
 
-        item.DestinationPath = _planner.BuildDestination(item, OutputFolderTextBox.Text, GetPreset(), CustomFormatTextBox.Text);
+        UpdateDestination(item);
         StatusTextBlock.Text = $"Match result: {item.Status}.";
     }
 
@@ -152,7 +152,7 @@ public partial class MainWindow : Window
             await ApplyTvShowIdentityToRelatedItemsAsync(client, item, selected);
         }
 
-        item.DestinationPath = _planner.BuildDestination(item, OutputFolderTextBox.Text, GetPreset(), CustomFormatTextBox.Text);
+        UpdateDestination(item);
         StatusTextBlock.Text = $"Match result: {item.Status}.";
     }
 
@@ -165,6 +165,7 @@ public partial class MainWindow : Window
         }
 
         var operation = OperationComboBox.SelectedIndex == 0 ? FileOperation.Move : FileOperation.Copy;
+        RefreshDestinations();
         StatusTextBlock.Text = "Applying staged rename...";
         var result = _applier.Apply(PreviewItems, operation);
         RemoveCompletedItems(result.CompletedItems);
@@ -251,6 +252,14 @@ public partial class MainWindow : Window
         RefreshDestinations();
     }
 
+    private void OutputFolderTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (IsLoaded)
+        {
+            RefreshDestinations();
+        }
+    }
+
     private void OriginalGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         SyncSelection(OriginalGrid, NewNamesGrid);
@@ -271,23 +280,44 @@ public partial class MainWindow : Window
 
     private void AddSources(IEnumerable<string> paths)
     {
-        var items = _scanner.Scan(paths);
+        IReadOnlyList<MediaPreviewItem> items;
+        try
+        {
+            items = _scanner.Scan(paths);
+        }
+        catch (Exception ex)
+        {
+            StatusTextBlock.Text = $"Could not scan media: {ex.Message}";
+            return;
+        }
+
+        var existingSources = PreviewItems
+            .Select(item => Path.GetFullPath(item.SourcePath))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var addedCount = 0;
         foreach (var item in items)
         {
+            if (!existingSources.Add(Path.GetFullPath(item.SourcePath)))
+            {
+                continue;
+            }
+
             item.PropertyChanged += (_, args) =>
             {
                 if (args.PropertyName is nameof(MediaPreviewItem.MatchedTitle)
+                    or nameof(MediaPreviewItem.MediaType)
                     or nameof(MediaPreviewItem.Year)
                     or nameof(MediaPreviewItem.Season)
                     or nameof(MediaPreviewItem.Episode)
                     or nameof(MediaPreviewItem.EpisodeTitle)
                     or nameof(MediaPreviewItem.TmdbId))
                 {
-                    item.DestinationPath = _planner.BuildDestination(item, OutputFolderTextBox.Text, GetPreset(), CustomFormatTextBox.Text);
+                    UpdateDestination(item);
                 }
             };
-            item.DestinationPath = _planner.BuildDestination(item, OutputFolderTextBox.Text, GetPreset(), CustomFormatTextBox.Text);
+            UpdateDestination(item);
             PreviewItems.Add(item);
+            addedCount++;
         }
 
         if (OriginalGrid.SelectedItem is null && PreviewItems.Count > 0)
@@ -295,14 +325,39 @@ public partial class MainWindow : Window
             OriginalGrid.SelectedItem = PreviewItems[0];
         }
 
-        StatusTextBlock.Text = $"Added {PreviewItems.Count} media file(s).";
+        StatusTextBlock.Text = addedCount == 0
+            ? "No new media files were added."
+            : $"Added {addedCount} media file(s); {PreviewItems.Count} total.";
     }
 
     private void RefreshDestinations()
     {
         foreach (var item in PreviewItems)
         {
-            item.DestinationPath = _planner.BuildDestination(item, OutputFolderTextBox.Text, GetPreset(), CustomFormatTextBox.Text);
+            UpdateDestination(item);
+        }
+    }
+
+    private bool UpdateDestination(MediaPreviewItem item)
+    {
+        try
+        {
+            item.DestinationPath = _planner.BuildDestination(
+                item,
+                OutputFolderTextBox.Text,
+                GetPreset(),
+                CustomFormatTextBox.Text);
+            if (item.Status.StartsWith("Invalid destination:", StringComparison.Ordinal))
+            {
+                item.Status = "Ready";
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            item.DestinationPath = "";
+            item.Status = $"Invalid destination: {ex.Message}";
+            return false;
         }
     }
 
@@ -469,7 +524,7 @@ public partial class MainWindow : Window
             relatedItem.Status = relatedItem.Season is null || relatedItem.Episode is null
                 ? "TV matched; episode needs review"
                 : "TMDB show match";
-            relatedItem.DestinationPath = _planner.BuildDestination(relatedItem, OutputFolderTextBox.Text, GetPreset(), CustomFormatTextBox.Text);
+            UpdateDestination(relatedItem);
         }
     }
 

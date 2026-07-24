@@ -18,9 +18,14 @@ public static class TvShowIdentityMatcher
             return false;
         }
 
-        var sameGroup = !string.IsNullOrWhiteSpace(source.SourceGroupPath)
-            && string.Equals(source.SourceGroupPath, candidate.SourceGroupPath, StringComparison.OrdinalIgnoreCase);
-        return sameGroup || Normalize(source.TitleGuess) == Normalize(candidate.TitleGuess);
+        var sourceHasGroup = !string.IsNullOrWhiteSpace(source.SourceGroupPath);
+        var candidateHasGroup = !string.IsNullOrWhiteSpace(candidate.SourceGroupPath);
+        if (sourceHasGroup && candidateHasGroup)
+        {
+            return string.Equals(source.SourceGroupPath, candidate.SourceGroupPath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return Normalize(source.TitleGuess) == Normalize(candidate.TitleGuess);
     }
 
     public static void Apply(MediaPreviewItem item, TvShowIdentity identity)

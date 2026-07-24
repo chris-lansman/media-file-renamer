@@ -10,7 +10,14 @@ public sealed class AppSettings
     public string TvdbApiKey { get; set; } = "";
     public bool UseTvdbFallback { get; set; } = true;
     public int AutoMatchConfidencePercent { get; set; } = 92;
-    public string DefaultOutputFolder { get; set; } = @"C:\Users\cclan\renamed-media";
+    public string DefaultOutputFolder { get; set; } = GetDefaultOutputFolder();
+
+    public static string GetDefaultOutputFolder()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "renamed-media");
+    }
 }
 
 public sealed class AppSettingsService

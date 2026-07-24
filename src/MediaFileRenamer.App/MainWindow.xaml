@@ -77,7 +77,8 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Output folder" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="0" Grid.Column="1" x:Name="OutputFolderTextBox" Text="C:\Users\cclan\renamed-media"/>
+                <TextBox Grid.Row="0" Grid.Column="1" x:Name="OutputFolderTextBox"
+                         TextChanged="OutputFolderTextBox_TextChanged"/>
                 <Button Grid.Row="0" Grid.Column="2" Content="Browse" Click="BrowseOutput_Click" Margin="8,0,14,0"/>
 
                 <TextBlock Grid.Row="0" Grid.Column="3" Text="Operation" VerticalAlignment="Center"/>

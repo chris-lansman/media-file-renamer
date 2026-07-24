@@ -13,8 +13,22 @@ public enum RenamePreset
 
 public sealed class RenamePlanner
 {
+    private static readonly HashSet<string> ReservedWindowsNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    };
+
     public string BuildDestination(MediaPreviewItem item, string outputRoot, RenamePreset preset, string customFormat = "")
     {
+        if (string.IsNullOrWhiteSpace(outputRoot) || !Path.IsPathFullyQualified(outputRoot))
+        {
+            throw new ArgumentException("Choose a complete output folder path.", nameof(outputRoot));
+        }
+
+        var normalizedRoot = Path.GetFullPath(outputRoot.Trim())
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var safeTitle = Sanitize(item.MatchedTitle);
         var extension = item.Extension;
 
@@ -24,7 +38,15 @@ public sealed class RenamePlanner
             ? BuildTvPath(item, safeTitle, extension, preset)
             : BuildMoviePath(item, safeTitle, extension, preset);
 
-        return Path.Combine(outputRoot, relative);
+        ValidateRelativePath(relative);
+        var destination = Path.GetFullPath(Path.Combine(normalizedRoot, relative));
+        var rootPrefix = normalizedRoot + Path.DirectorySeparatorChar;
+        if (!destination.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("The custom format must stay inside the output folder.", nameof(customFormat));
+        }
+
+        return destination;
     }
 
     private static string BuildMoviePath(MediaPreviewItem item, string title, string extension, RenamePreset preset)
@@ -77,6 +99,27 @@ public sealed class RenamePlanner
             : relative + extension;
     }
 
+    private static void ValidateRelativePath(string relative)
+    {
+        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathFullyQualified(relative))
+        {
+            throw new ArgumentException("The custom format must be a relative path.");
+        }
+
+        var segments = relative.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0 || segments.Any(segment => segment is "." or ".."))
+        {
+            throw new ArgumentException("The custom format cannot contain '.' or '..' path segments.");
+        }
+
+        if (segments.Any(segment => segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
+        {
+            throw new ArgumentException("The custom format contains characters Windows cannot use in a file or folder name.");
+        }
+    }
+
     private static string BuildYear(MediaPreviewItem item)
     {
         return item.Year is null ? "" : $" ({item.Year})";
@@ -97,6 +140,13 @@ public sealed class RenamePlanner
             builder.Append(invalid.Contains(c) ? '-' : c);
         }
 
-        return builder.ToString().Trim(' ', '.');
+        var sanitized = builder.ToString().Trim(' ', '.');
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            return "Unknown Title";
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(sanitized);
+        return ReservedWindowsNames.Contains(baseName) ? sanitized + "_" : sanitized;
     }
 }
