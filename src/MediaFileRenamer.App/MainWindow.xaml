@@ -20,6 +20,7 @@
             <MenuItem Header="_File">
                 <MenuItem Header="_Settings" Click="SettingsMenuItem_Click"/>
                 <MenuItem Header="_Operation History" Click="OperationHistoryMenuItem_Click"/>
+                <MenuItem Header="_Recovery Center" Click="RecoveryCenterMenuItem_Click"/>
                 <MenuItem Header="_Undo Last Operation" Click="UndoLastOperationMenuItem_Click"/>
                 <Separator/>
                 <MenuItem Header="E_xit" Click="ExitMenuItem_Click"/>

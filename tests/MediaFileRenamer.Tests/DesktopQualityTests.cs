@@ -189,6 +189,23 @@ public sealed class DesktopWindowQualityTests
         Assert.IsNotNull(window.FindName("TmdbLogo"));
         window.Close();
     }
+
+    [STATestMethod]
+    public void RecoveryWindow_WithNoInterruptedOperationsIsNonDestructive()
+    {
+        _ = Application.Current ?? new Application();
+        using var directory = new DesktopTestDirectory();
+        var window = new RecoveryWindow(
+            new OperationJournalService(directory.Path));
+
+        Assert.HasCount(0, window.Recoveries);
+        Assert.IsFalse(((Button)window.FindName("RollbackButton")).IsEnabled);
+        Assert.IsFalse(((Button)window.FindName("MarkResolvedButton")).IsEnabled);
+        StringAssert.Contains(
+            ((TextBlock)window.FindName("RecoveryStatusTextBlock")).Text,
+            "No interrupted operations");
+        window.Close();
+    }
 }
 
 internal sealed class ProviderStubHandler(
