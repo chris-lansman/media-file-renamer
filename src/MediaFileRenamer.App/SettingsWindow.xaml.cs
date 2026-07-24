@@ -1,5 +1,6 @@
 using MediaFileRenamer.App.Services;
 using System.Windows;
+using Forms = System.Windows.Forms;
 
 namespace MediaFileRenamer.App;
 
@@ -45,6 +46,21 @@ public partial class SettingsWindow : Window
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         DialogResult = false;
+    }
+
+    private void BrowseOutput_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new Forms.FolderBrowserDialog
+        {
+            Description = "Choose the default staging folder",
+            SelectedPath = DefaultOutputFolderTextBox.Text,
+            UseDescriptionForTitle = true
+        };
+
+        if (dialog.ShowDialog() == Forms.DialogResult.OK)
+        {
+            DefaultOutputFolderTextBox.Text = dialog.SelectedPath;
+        }
     }
 
     private static int ParseConfidence(string value)

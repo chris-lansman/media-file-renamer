@@ -13,7 +13,7 @@ public partial class MatchPickerWindow : Window
 
     public ObservableCollection<TmdbCandidate> Candidates { get; }
     public TmdbCandidate? SelectedCandidate { get; private set; }
-    public bool UseLocalGuess { get; private set; }
+    public string? LocalMediaType { get; private set; }
 
     public MatchPickerWindow(
         MediaPreviewItem item,
@@ -38,9 +38,15 @@ public partial class MatchPickerWindow : Window
         DialogResult = SelectedCandidate is not null;
     }
 
-    private void UseLocal_Click(object sender, RoutedEventArgs e)
+    private void UseAsMovie_Click(object sender, RoutedEventArgs e)
     {
-        UseLocalGuess = true;
+        LocalMediaType = "Movie";
+        DialogResult = true;
+    }
+
+    private void UseAsTv_Click(object sender, RoutedEventArgs e)
+    {
+        LocalMediaType = "TV";
         DialogResult = true;
     }
 

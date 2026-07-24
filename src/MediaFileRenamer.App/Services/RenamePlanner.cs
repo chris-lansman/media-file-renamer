@@ -34,6 +34,8 @@ public sealed class RenamePlanner
 
         var relative = preset == RenamePreset.Custom
             ? BuildCustomPath(item, customFormat, extension)
+            : item.MediaType == "Unknown"
+            ? Path.Combine("Review Needed", $"{safeTitle}{extension}")
             : item.MediaType == "TV"
             ? BuildTvPath(item, safeTitle, extension, preset)
             : BuildMoviePath(item, safeTitle, extension, preset);

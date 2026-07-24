@@ -27,6 +27,12 @@ public sealed class RenameApplier
         {
             try
             {
+                if (item.MediaType == "Unknown")
+                {
+                    item.Status = "Failed: choose Movie or TV before applying";
+                    continue;
+                }
+
                 if (item.MediaType == "TV" && (item.Season is null || item.Episode is null))
                 {
                     item.Status = "Failed: TV episode number is unresolved";

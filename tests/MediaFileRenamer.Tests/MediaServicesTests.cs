@@ -1,9 +1,24 @@
+using MediaFileRenamer.App;
 using MediaFileRenamer.App.Services;
 using MediaFileRenamer.App.ViewModels;
 using System.Net;
 using System.Text;
 
 namespace MediaFileRenamer.Tests;
+
+[TestClass]
+public sealed class WindowSmokeTests
+{
+    [STATestMethod]
+    public void MainWindow_ConstructsWithoutStartupException()
+    {
+        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        var window = new MainWindow();
+
+        Assert.AreEqual("Media File Renamer", window.Title);
+        window.Close();
+    }
+}
 
 [TestClass]
 public sealed class MediaScannerTests
@@ -252,6 +267,21 @@ public sealed class RenamePlannerTests
         StringAssert.Contains(destination, @"\CON_ (2024) {tmdb-1}\");
     }
 
+    [TestMethod]
+    public void UnknownMedia_IsStagedForReview()
+    {
+        var item = new MediaPreviewItem
+        {
+            Extension = ".mkv",
+            MediaType = "Unknown",
+            MatchedTitle = "Unclear Title"
+        };
+
+        var destination = new RenamePlanner().BuildDestination(item, @"C:\Output", RenamePreset.PlexStandard);
+
+        Assert.AreEqual(@"C:\Output\Review Needed\Unclear Title.mkv", destination);
+    }
+
     private static MediaPreviewItem Movie(string title, int year, int tmdbId) => new()
     {
         Extension = ".mkv",
@@ -362,6 +392,20 @@ public sealed class RenameApplierTests
         var source = temp.CreateFile("Episode.mkv", "test");
         var item = Item(source, Path.Combine(temp.Path, "Output", "Show - S00E00.mkv"));
         item.MediaType = "TV";
+
+        var result = new RenameApplier().Apply([item], FileOperation.Move);
+
+        Assert.IsTrue(File.Exists(source));
+        Assert.AreEqual(0, result.CompletedItems.Count);
+    }
+
+    [TestMethod]
+    public void Apply_BlocksUnknownMediaType()
+    {
+        using var temp = new TempDirectory();
+        var source = temp.CreateFile("Unknown.mkv", "test");
+        var item = Item(source, Path.Combine(temp.Path, "Output", "Unknown.mkv"));
+        item.MediaType = "Unknown";
 
         var result = new RenameApplier().Apply([item], FileOperation.Move);
 

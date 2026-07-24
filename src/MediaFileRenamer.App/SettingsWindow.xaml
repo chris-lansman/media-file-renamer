@@ -29,6 +29,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="130"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="TMDB API key" VerticalAlignment="Center"/>
@@ -44,7 +45,8 @@
                           Content="Use TVDB as fallback when available" IsChecked="True" Margin="0,12,0,0"/>
 
                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Output folder" VerticalAlignment="Center" Margin="0,14,0,0"/>
-                <TextBox Grid.Row="4" Grid.Column="1" x:Name="DefaultOutputFolderTextBox" Margin="0,14,0,0"/>
+                <TextBox Grid.Row="4" Grid.Column="1" x:Name="DefaultOutputFolderTextBox" Margin="0,14,8,0"/>
+                <Button Grid.Row="4" Grid.Column="2" Content="Browse" MinHeight="32" Margin="0,14,0,0" Click="BrowseOutput_Click"/>
 
                 <TextBlock Grid.Row="5" Grid.Column="0" Text="Auto-match" VerticalAlignment="Center" Margin="0,14,0,0"/>
                 <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,14,0,0">
@@ -53,7 +55,7 @@
                 </StackPanel>
 
                 <TextBlock Grid.Row="6" Grid.Column="0" Text="Settings file" VerticalAlignment="Top" Margin="0,14,0,0"/>
-                <TextBox Grid.Row="6" Grid.Column="1" x:Name="SettingsPathTextBox" Margin="0,14,0,0"
+                <TextBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" x:Name="SettingsPathTextBox" Margin="0,14,0,0"
                          IsReadOnly="True" TextWrapping="Wrap" MinHeight="48"/>
             </Grid>
         </Border>

@@ -26,6 +26,8 @@ public partial class MainWindow : Window
         _settings = _settingsService.Load();
         OutputFolderTextBox.Text = _settings.DefaultOutputFolder;
         DataContext = this;
+        UpdateCustomFormatVisibility();
+        UpdateActionState();
     }
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
@@ -33,7 +35,7 @@ public partial class MainWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Multiselect = true,
-            Filter = "Media files|*.mkv;*.mp4;*.m4v;*.avi;*.mov;*.wmv;*.ts;*.mpeg;*.mpg|All files|*.*"
+            Filter = "Media files|*.mkv;*.mp4;*.m4v;*.avi;*.mov;*.wmv;*.ts;*.mpeg;*.mpg;*.m2ts;*.mts;*.webm;*.vob|All files|*.*"
         };
 
         if (dialog.ShowDialog(this) == true)
@@ -205,6 +207,7 @@ public partial class MainWindow : Window
         }
 
         StatusTextBlock.Text = "Cleared.";
+        UpdateActionState();
     }
 
     private async Task RunBusyAsync(Func<Task> action)
@@ -231,7 +234,7 @@ public partial class MainWindow : Window
         finally
         {
             _isBusy = false;
-            SetActionButtonsEnabled(true);
+            UpdateActionState();
         }
     }
 
@@ -244,6 +247,33 @@ public partial class MainWindow : Window
         MatchSelectedButton.IsEnabled = enabled;
         ChooseSelectedButton.IsEnabled = enabled;
         RenameButton.IsEnabled = enabled;
+    }
+
+    private void UpdateActionState()
+    {
+        if (_isBusy
+            || OriginalGrid is null
+            || AddFilesButton is null
+            || AddFolderButton is null
+            || ClearButton is null
+            || MatchAllButton is null
+            || MatchSelectedButton is null
+            || ChooseSelectedButton is null
+            || RenameButton is null)
+        {
+            return;
+        }
+
+        var hasItems = PreviewItems.Count > 0;
+        var hasSelection = OriginalGrid.SelectedItem is MediaPreviewItem;
+        AddFilesButton.IsEnabled = true;
+        AddFolderButton.IsEnabled = true;
+        ClearButton.IsEnabled = hasItems;
+        MatchAllButton.IsEnabled = hasItems;
+        MatchSelectedButton.IsEnabled = hasSelection;
+        ChooseSelectedButton.IsEnabled = hasSelection;
+        RenameButton.IsEnabled = hasItems
+            && PreviewItems.All(item => !string.IsNullOrWhiteSpace(item.DestinationPath));
     }
 
     private void RemoveCompletedItems(IEnumerable<MediaPreviewItem> completedItems)
@@ -268,6 +298,7 @@ public partial class MainWindow : Window
         {
             OriginalGrid.SelectedItem = PreviewItems[0];
         }
+        UpdateActionState();
     }
 
     private void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -294,7 +325,20 @@ public partial class MainWindow : Window
 
     private void PresetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        UpdateCustomFormatVisibility();
         RefreshDestinations();
+    }
+
+    private void UpdateCustomFormatVisibility()
+    {
+        if (CustomFormatLabel is null || CustomFormatTextBox is null || PresetComboBox is null)
+        {
+            return;
+        }
+
+        var visibility = GetPreset() == RenamePreset.Custom ? Visibility.Visible : Visibility.Collapsed;
+        CustomFormatLabel.Visibility = visibility;
+        CustomFormatTextBox.Visibility = visibility;
     }
 
     private void CustomFormatTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -313,18 +357,23 @@ public partial class MainWindow : Window
     private void OriginalGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         SyncSelection(OriginalGrid, NewNamesGrid);
+        UpdateActionState();
     }
 
     private void NewNamesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         SyncSelection(NewNamesGrid, OriginalGrid);
+        UpdateActionState();
     }
 
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
     {
         if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
         {
-            AddSources((string[])e.Data.GetData(System.Windows.DataFormats.FileDrop));
+            if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] paths)
+            {
+                AddSources(paths);
+            }
         }
     }
 
@@ -378,6 +427,7 @@ public partial class MainWindow : Window
         StatusTextBlock.Text = addedCount == 0
             ? "No new media files were added."
             : $"Added {addedCount} media file(s); {PreviewItems.Count} total.";
+        UpdateActionState();
     }
 
     private void RefreshDestinations()
@@ -386,6 +436,7 @@ public partial class MainWindow : Window
         {
             UpdateDestination(item);
         }
+        UpdateActionState();
     }
 
     private bool UpdateDestination(MediaPreviewItem item)
@@ -401,12 +452,14 @@ public partial class MainWindow : Window
             {
                 item.Status = "Ready";
             }
+            UpdateActionState();
             return true;
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
             item.DestinationPath = "";
             item.Status = $"Invalid destination: {ex.Message}";
+            UpdateActionState();
             return false;
         }
     }
@@ -490,10 +543,15 @@ public partial class MainWindow : Window
 
         if (selected is null && showPickerForUncertain)
         {
-            selected = ShowMatchPicker(item, client, initialQuery, candidates, out var useLocalGuess);
-            if (useLocalGuess)
+            selected = ShowMatchPicker(item, client, initialQuery, candidates, out var localMediaType);
+            if (localMediaType is not null)
             {
-                item.Status = "Local guess";
+                item.MediaType = localMediaType;
+                if (localMediaType == "TV" && string.IsNullOrWhiteSpace(item.EpisodeTitle))
+                {
+                    item.EpisodeTitle = item.TitleGuess;
+                }
+                item.Status = localMediaType == "TV" ? "Local TV choice" : "Local movie choice";
                 return null;
             }
         }
@@ -583,7 +641,7 @@ public partial class MainWindow : Window
         TmdbClient client,
         string initialQuery,
         IReadOnlyList<TmdbCandidate> candidates,
-        out bool useLocalGuess)
+        out string? localMediaType)
     {
         var picker = new MatchPickerWindow(item, client, initialQuery, candidates)
         {
@@ -591,7 +649,7 @@ public partial class MainWindow : Window
         };
 
         var result = picker.ShowDialog();
-        useLocalGuess = picker.UseLocalGuess;
+        localMediaType = picker.LocalMediaType;
         return result == true ? picker.SelectedCandidate : null;
     }
 
