@@ -75,11 +75,11 @@
         </Border>
         <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Border" Property="Background" Value="{StaticResource AccentHoverBrush}"/>
-                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
+                <Setter TargetName="Border" Property="Background" Value="{DynamicResource AccentHoverBrush}"/>
+                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}"/>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="Border" Property="Background" Value="{StaticResource AccentPressedBrush}"/>
+                <Setter TargetName="Border" Property="Background" Value="{DynamicResource AccentPressedBrush}"/>
             </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True">
                 <Setter TargetName="Border" Property="BorderBrush"
@@ -104,9 +104,9 @@
     </ControlTemplate>
 
     <Style TargetType="Window">
-        <Setter Property="Background" Value="{StaticResource AppBackgroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
         <Style.Triggers>
             <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
                          Value="True">
@@ -119,12 +119,12 @@
     </Style>
 
     <Style TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
         <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisualStyle}"/>
         <Setter Property="MinHeight" Value="34"/>
         <Setter Property="Padding" Value="12,7"/>
@@ -133,8 +133,8 @@
     </Style>
 
     <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="Template" Value="{StaticResource PrimaryButtonTemplate}"/>
     </Style>
@@ -142,12 +142,12 @@
     <Style x:Key="QuietButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}"/>
     </Style>
 
     <Style TargetType="TextBox">
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="MinHeight" Value="32"/>
         <Setter Property="Padding" Value="9,5"/>
@@ -161,12 +161,12 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                             <Setter TargetName="Border" Property="BorderThickness" Value="2"/>
                         </Trigger>
                         <Trigger Property="IsReadOnly" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="{StaticResource SurfaceMutedBrush}"/>
-                            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource SurfaceMutedBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Border" Property="Background" Value="#F4F6F8"/>
@@ -188,8 +188,8 @@
     </Style>
 
     <Style TargetType="ComboBox">
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="MinHeight" Value="32"/>
         <Setter Property="Padding" Value="7,4"/>
@@ -210,20 +210,20 @@
     <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}"/>
         <Setter Property="Margin" Value="0,0,0,5"/>
     </Style>
 
     <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="16"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
     </Style>
 
     <Style TargetType="DataGrid">
         <Setter Property="AutoGenerateColumns" Value="False"/>
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CanUserAddRows" Value="False"/>
         <Setter Property="CanUserDeleteRows" Value="False"/>
@@ -237,12 +237,12 @@
         <Setter Property="ColumnHeaderStyle">
             <Setter.Value>
                 <Style TargetType="DataGridColumnHeader">
-                    <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}"/>
                     <Setter Property="BorderBrush" Value="#E1E8EF"/>
                     <Setter Property="BorderThickness" Value="0,0,0,1"/>
                     <Setter Property="FontSize" Value="12"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
-                    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}"/>
                     <Setter Property="Padding" Value="10,8"/>
                 </Style>
             </Setter.Value>
@@ -259,15 +259,15 @@
         <Setter Property="RowStyle">
             <Setter.Value>
                 <Style TargetType="DataGridRow">
-                    <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-                    <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                     <Style.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter Property="Background" Value="#F7FBFD"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
-                            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                         </Trigger>
                         <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
                                      Value="True">

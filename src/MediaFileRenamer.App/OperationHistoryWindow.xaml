@@ -5,9 +5,6 @@
         MinHeight="340" MinWidth="520" WindowStartupLocation="CenterOwner">
     <Window.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Themes/Theme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
     <ScrollViewer x:Name="OperationHistoryScrollViewer"
@@ -28,9 +25,9 @@
 
         <StackPanel Margin="0,0,0,16">
             <TextBlock Text="Operation History" FontSize="26" FontWeight="SemiBold"
-                       Foreground="{StaticResource TextBrush}"/>
+                       Foreground="{DynamicResource TextBrush}"/>
             <TextBlock Text="Recent move/copy journals are stored locally for recovery and Undo."
-                       Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}"/>
+                       Margin="0,4,0,0" Foreground="{DynamicResource MutedTextBrush}"/>
         </StackPanel>
 
         <DataGrid Grid.Row="1" x:Name="HistoryGrid" ItemsSource="{Binding History}"
@@ -61,19 +58,24 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <DockPanel Grid.Row="2" Margin="0,16,0,0">
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
             <TextBlock x:Name="HistoryStatusTextBlock" VerticalAlignment="Center"
-                       Foreground="{StaticResource MutedTextBrush}"
+                       TextWrapping="Wrap" Margin="0,0,12,0"
+                       Foreground="{DynamicResource MutedTextBrush}"
                        AutomationProperties.Name="Operation history status"
                        AutomationProperties.LiveSetting="Polite"/>
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Content="Undo Last Completed" Width="156" Margin="0,0,8,0"
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="Undo Last Completed" MinWidth="156" Margin="0,0,8,0"
                         Click="Undo_Click" AutomationProperties.Name="Undo last completed operation"/>
-                <Button x:Name="CloseButton" Content="_Close" Width="92"
+                <Button x:Name="CloseButton" Content="_Close" MinWidth="92"
                         IsCancel="True"
                         Click="Close_Click" AutomationProperties.Name="Close operation history"/>
             </StackPanel>
-        </DockPanel>
+        </Grid>
     </Grid>
     </Border>
     </ScrollViewer>

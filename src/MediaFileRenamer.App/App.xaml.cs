@@ -1,6 +1,8 @@
 using MediaFileRenamer.App.Services;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
+using WpfSystemColors = System.Windows.SystemColors;
 
 namespace MediaFileRenamer.App;
 
@@ -11,6 +13,7 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+        SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -34,6 +37,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        ApplyHighContrastPalette();
         DiagnosticLog.Current.Information("Application starting.");
         base.OnStartup(e);
     }
@@ -46,7 +50,66 @@ public partial class App : System.Windows.Application
                 $"Application exiting with code {e.ApplicationExitCode}.");
         }
 
+        SystemParameters.StaticPropertyChanged -= OnSystemParametersChanged;
         base.OnExit(e);
+    }
+
+    private void OnSystemParametersChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SystemParameters.HighContrast))
+        {
+            ApplyHighContrastPalette();
+        }
+    }
+
+    private void ApplyHighContrastPalette()
+    {
+        string[] paletteKeys =
+        [
+            "AppBackgroundBrush",
+            "SurfaceBrush",
+            "SurfaceMutedBrush",
+            "TextBrush",
+            "MutedTextBrush",
+            "BorderBrush",
+            "AccentBrush",
+            "AccentHoverBrush",
+            "AccentPressedBrush",
+            "AccentSoftBrush",
+            "MatchBrush",
+            "MatchSoftBrush",
+            "ReviewBrush",
+            "ReviewSoftBrush",
+            "BlockedBrush",
+            "BlockedSoftBrush",
+        ];
+
+        foreach (var key in paletteKeys)
+        {
+            Resources.Remove(key);
+        }
+
+        if (!SystemParameters.HighContrast)
+        {
+            return;
+        }
+
+        Resources["AppBackgroundBrush"] = WpfSystemColors.WindowBrush;
+        Resources["SurfaceBrush"] = WpfSystemColors.WindowBrush;
+        Resources["SurfaceMutedBrush"] = WpfSystemColors.WindowBrush;
+        Resources["TextBrush"] = WpfSystemColors.WindowTextBrush;
+        Resources["MutedTextBrush"] = WpfSystemColors.WindowTextBrush;
+        Resources["BorderBrush"] = WpfSystemColors.WindowTextBrush;
+        Resources["AccentBrush"] = WpfSystemColors.HighlightBrush;
+        Resources["AccentHoverBrush"] = WpfSystemColors.HighlightBrush;
+        Resources["AccentPressedBrush"] = WpfSystemColors.HighlightBrush;
+        Resources["AccentSoftBrush"] = WpfSystemColors.WindowBrush;
+        Resources["MatchBrush"] = WpfSystemColors.HighlightBrush;
+        Resources["MatchSoftBrush"] = WpfSystemColors.WindowBrush;
+        Resources["ReviewBrush"] = WpfSystemColors.HighlightBrush;
+        Resources["ReviewSoftBrush"] = WpfSystemColors.WindowBrush;
+        Resources["BlockedBrush"] = WpfSystemColors.HighlightBrush;
+        Resources["BlockedSoftBrush"] = WpfSystemColors.WindowBrush;
     }
 
     private static void OnDispatcherUnhandledException(

@@ -6,9 +6,6 @@
         WindowStartupLocation="CenterOwner">
     <Window.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Themes/Theme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
     <ScrollViewer x:Name="MatchPickerScrollViewer"
@@ -29,8 +26,8 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Choose the correct match" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-            <TextBlock x:Name="SourceTextBlock" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            <TextBlock Text="Choose the correct match" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+            <TextBlock x:Name="SourceTextBlock" Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <Grid Grid.Row="1" Margin="0,0,0,12">
@@ -41,7 +38,7 @@
             <TextBox Grid.Column="0" x:Name="SearchTextBox" MinHeight="36" VerticalContentAlignment="Center"
                      KeyDown="SearchTextBox_KeyDown"
                      automation:AutomationProperties.Name="Movie or show title to search"/>
-            <Button Grid.Column="1" x:Name="SearchButton" Content="Search" Width="94"
+            <Button Grid.Column="1" x:Name="SearchButton" Content="Search" MinWidth="94"
                     Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}"
                     Click="Search_Click"
                     automation:AutomationProperties.Name="Search metadata providers"/>
@@ -52,7 +49,7 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+            <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8">
             <ListBox x:Name="CandidateList" ItemsSource="{Binding Candidates}" MouseDoubleClick="CandidateList_MouseDoubleClick"
                  SelectionChanged="CandidateList_SelectionChanged"
                  automation:AutomationProperties.Name="Metadata match candidates"
@@ -107,22 +104,22 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
-                            <Border Grid.Column="0" Width="78" Height="116" Background="{StaticResource SurfaceMutedBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4">
+                            <Border Grid.Column="0" Width="78" Height="116" Background="{DynamicResource SurfaceMutedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4">
                                 <Image Source="{Binding PosterUrl}" Stretch="UniformToFill"/>
                             </Border>
 
                             <StackPanel Grid.Column="1" Margin="14,0,0,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"
+                                    <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
                                                TextWrapping="Wrap" MaxWidth="600"/>
-                                    <TextBlock Text="{Binding Year, StringFormat=  ({0})}" FontSize="16" Foreground="{StaticResource MutedTextBrush}" Margin="6,2,0,0"/>
+                                    <TextBlock Text="{Binding Year, StringFormat=  ({0})}" FontSize="16" Foreground="{DynamicResource MutedTextBrush}" Margin="6,2,0,0"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                    <TextBlock Text="{Binding MediaType}" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding ProviderLabel, StringFormat=  • {0}}" Foreground="{StaticResource MutedTextBrush}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding ProviderIds, StringFormat=  • {0}}" Foreground="{StaticResource MutedTextBrush}"/>
+                                    <TextBlock Text="{Binding MediaType}" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding ProviderLabel, StringFormat=  • {0}}" Foreground="{DynamicResource MutedTextBrush}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding ProviderIds, StringFormat=  • {0}}" Foreground="{DynamicResource MutedTextBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="{Binding Overview}" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" Margin="0,8,0,0"
+                                <TextBlock Text="{Binding Overview}" TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}" Margin="0,8,0,0"
                                            MaxHeight="64" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </Grid>
@@ -132,16 +129,16 @@
         </ListBox>
             </Border>
             <TextBlock Grid.Row="0" x:Name="SearchStatusTextBlock" HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Foreground="{StaticResource MutedTextBrush}" FontSize="16" TextWrapping="Wrap" TextAlignment="Center"
+                       Foreground="{DynamicResource MutedTextBrush}" FontSize="16" TextWrapping="Wrap" TextAlignment="Center"
                        MaxWidth="520" IsHitTestVisible="False"
                        automation:AutomationProperties.Name="Metadata search status"
                        automation:AutomationProperties.LiveSetting="Polite"/>
             <Border Grid.Row="1" Margin="0,10,0,0" Padding="12,8"
-                    Background="{StaticResource AccentSoftBrush}" CornerRadius="5">
+                    Background="{DynamicResource AccentSoftBrush}" CornerRadius="5">
                 <TextBlock x:Name="CandidateEvidenceTextBlock"
                            Text="Select a result to see why it matches."
                            TextWrapping="Wrap"
-                           Foreground="{StaticResource MutedTextBrush}"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            automation:AutomationProperties.Name="Selected match confidence evidence"
                            automation:AutomationProperties.LiveSetting="Polite"/>
             </Border>
@@ -149,20 +146,21 @@
 
         <DockPanel Grid.Row="3" Margin="0,16,0,0">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                <Button Content="Use as Movie" Width="116" Margin="0,0,8,0" Click="UseAsMovie_Click"/>
-                <Button Content="Use as TV" Width="104" Click="UseAsTv_Click"/>
+                <Button Content="Use as Movie" MinWidth="116" Margin="0,0,8,0" Click="UseAsMovie_Click"/>
+                <Button Content="Use as TV" MinWidth="104" Click="UseAsTv_Click"/>
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button x:Name="CancelButton" Content="_Cancel" Width="92"
+                <Button x:Name="CancelButton" Content="_Cancel" MinWidth="92"
                         Margin="0,0,8,0" Style="{StaticResource QuietButtonStyle}"
                         IsCancel="True" Click="Cancel_Click"
                         automation:AutomationProperties.Name="Cancel match selection"/>
-                <Button x:Name="UseSelectedButton" Content="Use Selected" Width="124"
+                <Button x:Name="UseSelectedButton" Content="Use Selected" MinWidth="124"
                         Style="{StaticResource PrimaryButtonStyle}" IsDefault="True"
                         Click="UseSelected_Click"
                         automation:AutomationProperties.Name="Use selected metadata match"/>
             </StackPanel>
-            <TextBlock Text="Double-click a result to choose it." VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}"/>
+            <TextBlock Text="Double-click a result to choose it." VerticalAlignment="Center"
+                       TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}"/>
         </DockPanel>
     </Grid>
     </Border>

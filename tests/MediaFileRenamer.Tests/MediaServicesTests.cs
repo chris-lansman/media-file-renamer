@@ -13,7 +13,7 @@ public sealed class WindowSmokeTests
     [STATestMethod]
     public void MainWindow_ConstructsWithoutStartupException()
     {
-        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        WpfTestApplication.EnsureResources();
         var window = new MainWindow();
 
         Assert.AreEqual("Media File Renamer", window.Title);
@@ -23,7 +23,7 @@ public sealed class WindowSmokeTests
     [STATestMethod]
     public void SettingsWindow_DisplaysSavedApiKeysAsPlainText()
     {
-        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        WpfTestApplication.EnsureResources();
         var settings = new AppSettings
         {
             TmdbApiKey = "visible-tmdb-key",
@@ -44,7 +44,7 @@ public sealed class WindowSmokeTests
     [STATestMethod]
     public void SettingsWindow_ScrollsFormWhenAvailableHeightIsLimited()
     {
-        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        WpfTestApplication.EnsureResources();
         var window = new SettingsWindow(new AppSettings(), @"C:\settings.json")
         {
             Height = 420
@@ -66,7 +66,7 @@ public sealed class WindowSmokeTests
     [STATestMethod]
     public void MainWindow_DisablesApplyUntilEveryItemIsReviewed()
     {
-        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        WpfTestApplication.EnsureResources();
         using var temp = new TempDirectory();
         var source = temp.CreateFile("Example Movie (2024).mkv");
         var window = new MainWindow();
@@ -94,7 +94,7 @@ public sealed class WindowSmokeTests
     [STATestMethod]
     public void MatchPicker_WithoutApiKeyOffersLocalClassification()
     {
-        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        WpfTestApplication.EnsureResources();
         var item = new MediaPreviewItem
         {
             SourcePath = @"C:\Media\Unknown.mkv",

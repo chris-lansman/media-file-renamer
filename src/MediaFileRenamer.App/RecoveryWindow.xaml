@@ -10,9 +10,6 @@
         automation:AutomationProperties.Name="Interrupted operation recovery center">
     <Window.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Themes/Theme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -35,14 +32,14 @@
 
         <StackPanel Margin="0,0,0,16">
             <TextBlock Text="Recovery Center" FontSize="26" FontWeight="SemiBold"
-                       Foreground="{StaticResource TextBrush}"/>
+                       Foreground="{DynamicResource TextBrush}"/>
             <TextBlock Margin="0,4,0,0" TextWrapping="Wrap"
-                       Foreground="{StaticResource MutedTextBrush}"
+                       Foreground="{DynamicResource MutedTextBrush}"
                        Text="An earlier move or copy did not reach a final journal state. Review the evidence below. Nothing is changed automatically."/>
         </StackPanel>
 
-        <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+        <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 CornerRadius="8" Padding="4" Margin="0,0,0,12">
             <ListBox x:Name="RecoveryList"
                      ItemsSource="{Binding Recoveries}"
@@ -69,7 +66,7 @@
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <Border BorderBrush="{StaticResource BorderBrush}"
+                        <Border BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="0,0,0,1" Padding="12,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -82,11 +79,11 @@
                                            FontWeight="SemiBold"/>
                                 <TextBlock Grid.Column="1" Text="{Binding Operation}"/>
                                 <TextBlock Grid.Column="2" Text="{Binding Assessment}"
-                                           Foreground="{StaticResource ReviewBrush}"
+                                           Foreground="{DynamicResource ReviewBrush}"
                                            FontWeight="SemiBold"/>
                                 <TextBlock Grid.Column="3" Text="{Binding Message}"
                                            TextWrapping="Wrap"
-                                           Foreground="{StaticResource MutedTextBrush}"/>
+                                           Foreground="{DynamicResource MutedTextBrush}"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -136,19 +133,19 @@
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="RecoveryStatusTextBlock"
                        VerticalAlignment="Center" TextWrapping="Wrap"
-                       Foreground="{StaticResource MutedTextBrush}"
+                       Foreground="{DynamicResource MutedTextBrush}"
                        automation:AutomationProperties.Name="Recovery status"
                        automation:AutomationProperties.LiveSetting="Polite"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0">
                 <Button x:Name="RollbackButton" Content="_Roll Back Safely"
-                        Width="142" Margin="0,0,8,0"
+                        MinWidth="142" Margin="0,0,8,0"
                         Click="Rollback_Click"
                         automation:AutomationProperties.Name="Safely roll back selected interrupted operation"/>
                 <Button x:Name="MarkResolvedButton" Content="_Mark Resolved"
-                        Width="126" Margin="0,0,8,0"
+                        MinWidth="126" Margin="0,0,8,0"
                         Click="MarkResolved_Click"
                         automation:AutomationProperties.Name="Mark selected operation manually resolved"/>
-                <Button x:Name="CloseButton" Content="_Continue Later" Width="122"
+                <Button x:Name="CloseButton" Content="_Continue Later" MinWidth="122"
                         Style="{StaticResource PrimaryButtonStyle}"
                         IsCancel="True" Click="Close_Click"
                         automation:AutomationProperties.Name="Close recovery center without changes"/>

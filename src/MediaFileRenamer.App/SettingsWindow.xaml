@@ -8,19 +8,16 @@
         automation:AutomationProperties.Name="Media File Renamer settings">
     <Window.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Themes/Theme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
             <Style TargetType="GroupBox">
-                <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
                 <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Padding" Value="16"/>
             </Style>
             <Style x:Key="SettingsLabelStyle" TargetType="Label">
                 <Setter Property="FontSize" Value="12"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}"/>
                 <Setter Property="Padding" Value="0"/>
             </Style>
         </ResourceDictionary>
@@ -35,20 +32,20 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,18">
             <TextBlock Text="Settings" FontSize="26" FontWeight="SemiBold"
-                       Foreground="{StaticResource TextBrush}"/>
+                       Foreground="{DynamicResource TextBrush}"/>
             <TextBlock Text="Metadata sources, matching behavior, and staging preferences for this Windows user."
-                       Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
+                       Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0"
                        TextWrapping="Wrap"/>
             <Border x:Name="FirstRunBanner" Visibility="Collapsed"
-                    Background="{StaticResource AccentSoftBrush}"
-                    BorderBrush="{StaticResource AccentBrush}"
+                    Background="{DynamicResource AccentSoftBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}"
                     BorderThickness="1" CornerRadius="7"
                     Padding="14,11" Margin="0,14,0,0"
                     automation:AutomationProperties.Name="First-run setup guidance">
                 <StackPanel>
                     <TextBlock Text="Welcome — let’s make the first run safe"
                                FontWeight="SemiBold" FontSize="15"
-                               Foreground="{StaticResource AccentHoverBrush}"/>
+                               Foreground="{DynamicResource AccentHoverBrush}"/>
                     <TextBlock Margin="0,5,0,0" TextWrapping="Wrap"
                                Text="Add your personal provider credentials and test them, choose a staging folder, then select the default operation. Copy is recommended until you have verified the workflow with your own media. Nothing is changed until every item is reviewed and you confirm the batch."/>
                 </StackPanel>
@@ -99,9 +96,10 @@
 
                         <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
                                    x:Name="TmdbTestStatusTextBlock" Margin="0,7,0,0"
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Text="TMDB connection not tested."
                                    TextWrapping="Wrap"
-                                   automation:AutomationProperties.Name="TMDB connection status"
+                                   automation:AutomationProperties.Name="{Binding Text, RelativeSource={RelativeSource Self}}"
                                    automation:AutomationProperties.LiveSetting="Polite"/>
 
                         <Separator Grid.Row="3" Grid.ColumnSpan="3" Margin="0,14"/>
@@ -133,9 +131,10 @@
 
                         <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2"
                                    x:Name="TvdbTestStatusTextBlock" Margin="0,7,0,0"
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Text="TVDB connection not tested."
                                    TextWrapping="Wrap"
-                                   automation:AutomationProperties.Name="TVDB connection status"
+                                   automation:AutomationProperties.Name="{Binding Text, RelativeSource={RelativeSource Self}}"
                                    automation:AutomationProperties.LiveSetting="Polite"/>
                     </Grid>
                 </GroupBox>
@@ -155,7 +154,7 @@
                                      automation:AutomationProperties.Name="Automatic match confidence percentage"/>
                             <TextBlock Text="% confidence before choosing automatically"
                                        VerticalAlignment="Center" Margin="8,0,0,0"
-                                       Foreground="{StaticResource MutedTextBrush}"/>
+                                       Foreground="{DynamicResource MutedTextBrush}"/>
                         </StackPanel>
                     </Grid>
                 </GroupBox>
@@ -209,11 +208,11 @@
 
         <StackPanel Grid.Row="2" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,18,0,0">
-            <Button Content="_Cancel" Width="92" Margin="0,0,8,0"
+            <Button Content="_Cancel" MinWidth="92" Margin="0,0,8,0"
                     IsCancel="True" Style="{StaticResource QuietButtonStyle}"
                     Click="Cancel_Click"
                     automation:AutomationProperties.Name="Cancel settings"/>
-            <Button x:Name="SaveSettingsButton" Content="_Save Settings" Width="126"
+            <Button x:Name="SaveSettingsButton" Content="_Save Settings" MinWidth="126"
                     IsDefault="True" Style="{StaticResource PrimaryButtonStyle}"
                     Click="Save_Click"
                     automation:AutomationProperties.Name="Save settings"/>
