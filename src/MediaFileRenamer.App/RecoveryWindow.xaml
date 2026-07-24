@@ -6,6 +6,7 @@
         MinHeight="540" MinWidth="820"
         WindowStartupLocation="CenterOwner"
         Icon="Assets/app-icon.ico"
+        Loaded="Window_Loaded"
         automation:AutomationProperties.Name="Interrupted operation recovery center">
     <Window.Resources>
         <ResourceDictionary>
@@ -112,7 +113,7 @@
                         Width="126" Margin="0,0,8,0"
                         Click="MarkResolved_Click"
                         automation:AutomationProperties.Name="Mark selected operation manually resolved"/>
-                <Button Content="_Continue Later" Width="122"
+                <Button x:Name="CloseButton" Content="_Continue Later" Width="122"
                         Style="{StaticResource PrimaryButtonStyle}"
                         IsCancel="True" Click="Close_Click"
                         automation:AutomationProperties.Name="Close recovery center without changes"/>

@@ -47,12 +47,13 @@ public partial class MainWindow : Window
         UpdateActionState();
     }
 
-    protected override void OnContentRendered(EventArgs e)
+    protected override async void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
-        if (_journalService.GetInterruptedOperations().Count > 0)
+        var recoveries = await GetStartupRecoveriesAsync();
+        if (recoveries is { Count: > 0 })
         {
-            ShowRecoveryCenter();
+            ShowRecoveryCenter(recoveries);
         }
 
         if (!_showFirstRun || _firstRunPromptShown)
@@ -497,16 +498,54 @@ public partial class MainWindow : Window
         ShowRecoveryCenter();
     }
 
-    private void ShowRecoveryCenter()
+    private void ShowRecoveryCenter(
+        IReadOnlyList<InterruptedOperationRecovery>? initialRecoveries = null)
     {
-        var window = new RecoveryWindow(_journalService)
+        var window = new RecoveryWindow(_journalService, initialRecoveries)
         {
             Owner = this
         };
         window.ShowDialog();
-        if (_journalService.GetInterruptedOperations().Count == 0)
+        if (window.Recoveries.Count == 0)
         {
             StatusTextBlock.Text = "Interrupted operations have been reviewed.";
+        }
+    }
+
+    private async Task<IReadOnlyList<InterruptedOperationRecovery>?>
+        GetStartupRecoveriesAsync()
+    {
+        var inspection = Task.Run(_journalService.GetInterruptedOperations);
+        var completed = await Task.WhenAny(
+            inspection,
+            Task.Delay(TimeSpan.FromSeconds(5)));
+        if (completed != inspection)
+        {
+            _ = inspection.ContinueWith(
+                task => DiagnosticLog.Current.Error(
+                    "The background recovery inspection failed.",
+                    task.Exception),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
+            DiagnosticLog.Current.Warning(
+                "Recovery inspection exceeded the startup time limit.");
+            StatusTextBlock.Text =
+                "Recovery inspection is taking longer than expected. "
+                + "The app remains usable; open File > Recovery Center after network paths are available.";
+            return null;
+        }
+
+        try
+        {
+            return await inspection;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Current.Error("Could not inspect interrupted operations.", ex);
+            StatusTextBlock.Text =
+                "Recovery journals could not be inspected. Open File > Recovery Center to retry.";
+            return null;
         }
     }
 
