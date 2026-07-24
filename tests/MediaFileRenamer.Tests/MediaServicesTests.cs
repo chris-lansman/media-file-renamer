@@ -1,5 +1,7 @@
 using MediaFileRenamer.App.Services;
 using MediaFileRenamer.App.ViewModels;
+using System.Net;
+using System.Text;
 
 namespace MediaFileRenamer.Tests;
 
@@ -106,6 +108,32 @@ public sealed class MediaScannerTests
 [TestClass]
 public sealed class MatchingTests
 {
+    [TestMethod]
+    public async Task SearchCandidates_ReportsRejectedApiKey()
+    {
+        using var httpClient = new HttpClient(new StubHttpHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.Unauthorized)));
+        var client = new TmdbClient("bad-key", httpClient);
+        var item = new MediaPreviewItem { MediaType = "Movie", TitleGuess = "Film" };
+
+        var exception = await Assert.ThrowsAsync<MetadataLookupException>(
+            () => client.SearchCandidatesAsync(item));
+
+        StringAssert.Contains(exception.Message, "rejected the API key");
+    }
+
+    [TestMethod]
+    public async Task SearchCandidates_DistinguishesNoResultsFromFailure()
+    {
+        using var httpClient = new HttpClient(new StubHttpHandler(_ => TestHttp.JsonResponse("{\"results\":[]}")));
+        var client = new TmdbClient("key", httpClient);
+        var item = new MediaPreviewItem { MediaType = "Movie", TitleGuess = "No Such Film" };
+
+        var candidates = await client.SearchCandidatesAsync(item);
+
+        Assert.AreEqual(0, candidates.Count);
+    }
+
     [TestMethod]
     public void FindAutoMatch_AcceptsExactTitleAndYear()
     {
@@ -386,5 +414,26 @@ internal sealed class TempDirectory : IDisposable
         {
             Directory.Delete(Path, recursive: true);
         }
+    }
+}
+
+internal sealed class StubHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult(responder(request));
+    }
+}
+
+internal static class TestHttp
+{
+    public static HttpResponseMessage JsonResponse(string json)
+    {
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
     }
 }

@@ -8,15 +8,15 @@ namespace MediaFileRenamer.App.Services;
 public sealed class TmdbClient
 {
     private readonly string _apiKey;
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri("https://api.themoviedb.org/3/")
-    };
+    private readonly HttpClient _httpClient;
     private readonly Dictionary<int, IReadOnlyList<TmdbEpisode>> _episodeCache = [];
 
-    public TmdbClient(string apiKey)
+    public TmdbClient(string apiKey, HttpClient? httpClient = null)
     {
         _apiKey = apiKey;
+        _httpClient = httpClient ?? new HttpClient();
+        _httpClient.BaseAddress ??= new Uri("https://api.themoviedb.org/3/");
+        _httpClient.Timeout = TimeSpan.FromSeconds(30);
     }
 
     public async Task<IReadOnlyList<TmdbCandidate>> SearchCandidatesAsync(MediaPreviewItem item, string? queryOverride = null)
@@ -24,6 +24,10 @@ public sealed class TmdbClient
         try
         {
             var query = string.IsNullOrWhiteSpace(queryOverride) ? item.TitleGuess : queryOverride.Trim();
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return [];
+            }
             if (item.MediaType == "TV")
             {
                 return await SearchTvCandidatesAsync(item, query);
@@ -41,9 +45,13 @@ public sealed class TmdbClient
                 .SelectMany(results => results)
                 .ToList();
         }
-        catch
+        catch (MetadataLookupException)
         {
-            return [];
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            throw new MetadataLookupException("TMDB lookup failed. Check the API key and internet connection.", ex);
         }
     }
 
@@ -119,7 +127,7 @@ public sealed class TmdbClient
         var url = $"search/movie?api_key={Uri.EscapeDataString(_apiKey)}&query={Uri.EscapeDataString(query)}";
 
         using var response = await _httpClient.GetAsync(url);
-        response.EnsureSuccessStatusCode();
+        EnsureSuccess(response);
         using var stream = await response.Content.ReadAsStreamAsync();
         var result = await JsonSerializer.DeserializeAsync<TmdbSearchResponse>(stream);
 
@@ -141,7 +149,7 @@ public sealed class TmdbClient
     {
         var url = $"search/tv?api_key={Uri.EscapeDataString(_apiKey)}&query={Uri.EscapeDataString(query)}";
         using var response = await _httpClient.GetAsync(url);
-        response.EnsureSuccessStatusCode();
+        EnsureSuccess(response);
         using var stream = await response.Content.ReadAsStreamAsync();
         var result = await JsonSerializer.DeserializeAsync<TmdbSearchResponse>(stream);
 
@@ -187,7 +195,7 @@ public sealed class TmdbClient
         try
         {
             using var showResponse = await _httpClient.GetAsync($"tv/{id}?api_key={Uri.EscapeDataString(_apiKey)}");
-            showResponse.EnsureSuccessStatusCode();
+            EnsureSuccess(showResponse);
             using var showStream = await showResponse.Content.ReadAsStreamAsync();
             var show = await JsonSerializer.DeserializeAsync<TmdbTvDetail>(showStream);
             var episodes = new List<TmdbEpisode>();
@@ -210,10 +218,27 @@ public sealed class TmdbClient
             _episodeCache[id] = episodes;
             return episodes;
         }
-        catch
+        catch (MetadataLookupException)
         {
-            return [];
+            throw;
         }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            throw new MetadataLookupException("TMDB episode lookup failed. Check the API key and internet connection.", ex);
+        }
+    }
+
+    private static void EnsureSuccess(HttpResponseMessage response)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        var message = response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+            ? "TMDB rejected the API key. Open File > Settings and verify it."
+            : $"TMDB returned {(int)response.StatusCode} {response.ReasonPhrase}.";
+        throw new MetadataLookupException(message);
     }
 
     private static int? ParseYear(string? value)

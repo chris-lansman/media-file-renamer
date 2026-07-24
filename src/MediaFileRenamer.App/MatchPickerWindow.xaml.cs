@@ -77,7 +77,16 @@ public partial class MatchPickerWindow : Window
         }
 
         SearchStatusTextBlock.Text = "Searching TMDB...";
-        var results = await _client.SearchCandidatesAsync(_item, query);
+        IReadOnlyList<TmdbCandidate> results;
+        try
+        {
+            results = await _client.SearchCandidatesAsync(_item, query);
+        }
+        catch (MetadataLookupException ex)
+        {
+            SearchStatusTextBlock.Text = ex.Message;
+            return;
+        }
 
         Candidates.Clear();
         foreach (var candidate in results)

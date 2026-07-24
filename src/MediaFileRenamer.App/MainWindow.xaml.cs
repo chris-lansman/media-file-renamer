@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly AppSettingsService _settingsService = new();
     private AppSettings _settings = new();
     private bool _isSyncingSelection;
+    private bool _isBusy;
 
     public ObservableCollection<MediaPreviewItem> PreviewItems { get; } = [];
 
@@ -73,7 +74,7 @@ public partial class MainWindow : Window
 
     private async void MatchAll_Click(object sender, RoutedEventArgs e)
     {
-        await MatchAllAsync();
+        await RunBusyAsync(MatchAllAsync);
     }
 
     private async Task MatchAllAsync()
@@ -104,6 +105,11 @@ public partial class MainWindow : Window
 
     private async void MatchSelected_Click(object sender, RoutedEventArgs e)
     {
+        await RunBusyAsync(MatchSelectedAsync);
+    }
+
+    private async Task MatchSelectedAsync()
+    {
         if (OriginalGrid.SelectedItem is not MediaPreviewItem item)
         {
             System.Windows.MessageBox.Show(this, "Select one media file before matching.", "No file selected", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -130,6 +136,11 @@ public partial class MainWindow : Window
     }
 
     private async void ChooseSelected_Click(object sender, RoutedEventArgs e)
+    {
+        await RunBusyAsync(ChooseSelectedAsync);
+    }
+
+    private async Task ChooseSelectedAsync()
     {
         if (OriginalGrid.SelectedItem is not MediaPreviewItem item)
         {
@@ -194,6 +205,45 @@ public partial class MainWindow : Window
         }
 
         StatusTextBlock.Text = "Cleared.";
+    }
+
+    private async Task RunBusyAsync(Func<Task> action)
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        SetActionButtonsEnabled(false);
+        try
+        {
+            await action();
+        }
+        catch (MetadataLookupException ex)
+        {
+            StatusTextBlock.Text = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            StatusTextBlock.Text = $"Operation failed: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+            SetActionButtonsEnabled(true);
+        }
+    }
+
+    private void SetActionButtonsEnabled(bool enabled)
+    {
+        AddFilesButton.IsEnabled = enabled;
+        AddFolderButton.IsEnabled = enabled;
+        ClearButton.IsEnabled = enabled;
+        MatchAllButton.IsEnabled = enabled;
+        MatchSelectedButton.IsEnabled = enabled;
+        ChooseSelectedButton.IsEnabled = enabled;
+        RenameButton.IsEnabled = enabled;
     }
 
     private void RemoveCompletedItems(IEnumerable<MediaPreviewItem> completedItems)
