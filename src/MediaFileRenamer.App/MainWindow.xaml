@@ -6,9 +6,6 @@
         KeyDown="Window_KeyDown">
     <Window.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Themes/Theme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
             <Style x:Key="AccessiblePreviewRowStyle" TargetType="DataGridRow"
                    BasedOn="{StaticResource {x:Type DataGridRow}}">
                 <Setter Property="AutomationProperties.Name">
@@ -29,7 +26,8 @@
     </Window.Resources>
 
     <DockPanel>
-        <Menu DockPanel.Dock="Top" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4,2">
+        <Menu DockPanel.Dock="Top" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4,2"
+              AutomationProperties.Name="Application menu">
             <MenuItem Header="_File">
                 <MenuItem Header="_Settings" Click="SettingsMenuItem_Click"/>
                 <MenuItem Header="_Operation History" Click="OperationHistoryMenuItem_Click"/>
@@ -48,11 +46,11 @@
                       HorizontalScrollBarVisibility="Auto"
                       CanContentScroll="False"
                       AutomationProperties.Name="Media rename workspace">
-        <Border MinWidth="944" MinHeight="658"
+        <Border MinWidth="944"
+                MinHeight="{Binding ViewportHeight, ElementName=MainScrollViewer}"
                 Width="{Binding ViewportWidth, ElementName=MainScrollViewer}"
-                Height="{Binding ViewportHeight, ElementName=MainScrollViewer}"
                 Padding="22,18,22,20">
-        <Grid>
+        <Grid MinHeight="658">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -65,16 +63,21 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal">
-                    <Border Width="42" Height="42" Background="{StaticResource AccentSoftBrush}" CornerRadius="8" Padding="8" Margin="0,0,12,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="42" Height="42" Background="{DynamicResource AccentSoftBrush}" CornerRadius="8" Padding="8" Margin="0,0,12,0">
                         <Image Source="Assets/app-icon.png" Stretch="Uniform"/>
                     </Border>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="Media File Renamer" FontSize="27" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="Media File Renamer" FontSize="27" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
                         <TextBlock Text="Stage clean Plex-friendly names, review every change, then move or copy with confidence."
-                                   Foreground="{StaticResource MutedTextBrush}" Margin="0,3,0,0"/>
+                                   Foreground="{DynamicResource MutedTextBrush}" Margin="0,3,12,0"
+                                   TextWrapping="Wrap"/>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="AddFilesButton" Content="Add Files" Click="AddFiles_Click" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0"
                             AutomationProperties.Name="Add media files"/>
@@ -85,12 +88,12 @@
                 </StackPanel>
             </Grid>
 
-            <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,18">
+            <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,18">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="180"/>
-                        <ColumnDefinition Width="190"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
@@ -114,7 +117,7 @@
                     <StackPanel Grid.Column="1" Margin="0,0,16,0">
                         <TextBlock x:Name="OperationLabel" Text="OPERATION"
                                    Style="{StaticResource FieldLabelStyle}"/>
-                        <ComboBox x:Name="OperationComboBox" SelectedIndex="0"
+                        <ComboBox x:Name="OperationComboBox" SelectedIndex="0" MinWidth="180"
                                   AutomationProperties.LabeledBy="{Binding ElementName=OperationLabel}">
                             <ComboBoxItem Content="Move to staged folder"/>
                             <ComboBoxItem Content="Copy to staged folder"/>
@@ -124,7 +127,7 @@
                     <StackPanel Grid.Column="2" Margin="0,0,16,0">
                         <TextBlock x:Name="PresetLabel" Text="NAMING PRESET"
                                    Style="{StaticResource FieldLabelStyle}"/>
-                        <ComboBox x:Name="PresetComboBox" SelectedIndex="0"
+                        <ComboBox x:Name="PresetComboBox" SelectedIndex="0" MinWidth="190"
                                   SelectionChanged="PresetComboBox_SelectionChanged"
                                   AutomationProperties.LabeledBy="{Binding ElementName=PresetLabel}">
                             <ComboBoxItem Content="Plex standard"/>
@@ -143,7 +146,7 @@
             <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="154"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
@@ -153,11 +156,11 @@
 
                 <DockPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
                     <TextBlock Text="Original Files" Style="{StaticResource SectionTitleStyle}"/>
-                    <TextBlock Text="{Binding PreviewItems.Count, StringFormat={}{0} staged}" Foreground="{StaticResource MutedTextBrush}" Margin="10,3,0,0"/>
+                    <TextBlock Text="{Binding PreviewItems.Count, StringFormat={}{0} staged}" Foreground="{DynamicResource MutedTextBrush}" Margin="10,3,0,0"/>
                 </DockPanel>
                 <DockPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,8">
                     <ComboBox DockPanel.Dock="Right" x:Name="ReviewFilterComboBox"
-                              Width="132" SelectedIndex="0"
+                              MinWidth="132" SelectedIndex="0"
                               SelectionChanged="ReviewFilterComboBox_SelectionChanged"
                               AutomationProperties.Name="Filter review items">
                         <ComboBoxItem Content="All items"/>
@@ -166,7 +169,7 @@
                         <ComboBoxItem Content="Failed"/>
                     </ComboBox>
                     <TextBlock Text="Proposed Names" Style="{StaticResource SectionTitleStyle}"/>
-                    <TextBlock Text="Review state and provider" Foreground="{StaticResource MutedTextBrush}" Margin="10,3,0,0"/>
+                    <TextBlock Text="Review state and provider" Foreground="{DynamicResource MutedTextBrush}" Margin="10,3,0,0"/>
                 </DockPanel>
 
                 <DataGrid Grid.Row="1" Grid.Column="0" x:Name="OriginalGrid"
@@ -180,18 +183,18 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <StackPanel Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Width="132">
-                    <TextBlock Text="REVIEW SELECTED" Style="{StaticResource FieldLabelStyle}" TextAlignment="Center" Margin="0,0,0,10"/>
-                    <Button x:Name="MatchSelectedButton" Content="Match" Width="132" Margin="0,0,0,8" Click="MatchSelected_Click" IsEnabled="False"
+                <StackPanel Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" MinWidth="132" Margin="11,0">
+                    <TextBlock Text="REVIEW SELECTED" Style="{StaticResource FieldLabelStyle}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <Button x:Name="MatchSelectedButton" Content="Match" MinWidth="132" Margin="0,0,0,8" Click="MatchSelected_Click" IsEnabled="False"
                             AutomationProperties.Name="Match selected file"/>
-                    <Button x:Name="ChooseSelectedButton" Content="Choose..." Width="132" Margin="0,0,0,14" Click="ChooseSelected_Click" IsEnabled="False"
+                    <Button x:Name="ChooseSelectedButton" Content="Choose..." MinWidth="132" Margin="0,0,0,14" Click="ChooseSelected_Click" IsEnabled="False"
                             AutomationProperties.Name="Choose match for selected file"/>
-                    <Button x:Name="RenameButton" Content="Apply Rename" Width="132" Margin="0" Click="ApplyRename_Click"
+                    <Button x:Name="RenameButton" Content="Apply Rename" MinWidth="132" Margin="0" Click="ApplyRename_Click"
                             Style="{StaticResource PrimaryButtonStyle}" IsEnabled="False"
                             AutomationProperties.Name="Apply reviewed rename batch"/>
                     <TextBlock x:Name="ReviewCountTextBlock" Text="Add files to begin" TextAlignment="Center"
                                TextWrapping="Wrap" FontSize="12" FontWeight="SemiBold"
-                               Foreground="{StaticResource MutedTextBrush}" Margin="0,8,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}" Margin="0,8,0,0"
                                AutomationProperties.Name="Review status"
                                AutomationProperties.LiveSetting="Polite"/>
                 </StackPanel>
@@ -210,28 +213,28 @@
                                     <Border Padding="8,4" CornerRadius="10" HorizontalAlignment="Left" ToolTip="{Binding Status}">
                                         <Border.Style>
                                             <Style TargetType="Border">
-                                                <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}"/>
-                                                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                                <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
                                                 <Setter Property="BorderThickness" Value="1"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding MatchState}" Value="Matched">
-                                                        <Setter Property="Background" Value="{StaticResource MatchSoftBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource MatchSoftBrush}"/>
                                                         <Setter Property="BorderBrush" Value="#B9E5D1"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding MatchState}" Value="Review needed">
-                                                        <Setter Property="Background" Value="{StaticResource ReviewSoftBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource ReviewSoftBrush}"/>
                                                         <Setter Property="BorderBrush" Value="#F0D29A"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding MatchState}" Value="Blocked">
-                                                        <Setter Property="Background" Value="{StaticResource BlockedSoftBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource BlockedSoftBrush}"/>
                                                         <Setter Property="BorderBrush" Value="#F1B9B4"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding MatchState}" Value="Manual choice">
-                                                        <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
                                                         <Setter Property="BorderBrush" Value="#B8DCEB"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding MatchState}" Value="Complete">
-                                                        <Setter Property="Background" Value="{StaticResource MatchSoftBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource MatchSoftBrush}"/>
                                                         <Setter Property="BorderBrush" Value="#B9E5D1"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -240,22 +243,22 @@
                                         <TextBlock Text="{Binding MatchLabel}" FontSize="12" FontWeight="SemiBold">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding MatchState}" Value="Matched">
-                                                            <Setter Property="Foreground" Value="{StaticResource MatchBrush}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource MatchBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding MatchState}" Value="Review needed">
-                                                            <Setter Property="Foreground" Value="{StaticResource ReviewBrush}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource ReviewBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding MatchState}" Value="Blocked">
-                                                            <Setter Property="Foreground" Value="{StaticResource BlockedBrush}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource BlockedBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding MatchState}" Value="Manual choice">
-                                                            <Setter Property="Foreground" Value="{StaticResource AccentHoverBrush}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource AccentHoverBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding MatchState}" Value="Complete">
-                                                            <Setter Property="Foreground" Value="{StaticResource MatchBrush}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource MatchBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -269,7 +272,7 @@
                 </DataGrid>
             </Grid>
 
-            <Border Grid.Row="3" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,18,0,0">
+            <Border Grid.Row="3" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,18,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -279,15 +282,15 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="58"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="2*"/>
-                        <ColumnDefinition Width="48"/>
-                        <ColumnDefinition Width="78"/>
-                        <ColumnDefinition Width="62"/>
-                        <ColumnDefinition Width="78"/>
-                        <ColumnDefinition Width="66"/>
-                        <ColumnDefinition Width="78"/>
-                        <ColumnDefinition Width="96"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="2*"/>
                     </Grid.ColumnDefinitions>
 
@@ -301,16 +304,19 @@
                     <TextBlock Grid.Row="1" Grid.Column="2" x:Name="SelectedYearLabel"
                                Text="Year" VerticalAlignment="Center" Margin="10,0,0,0"/>
                     <TextBox Grid.Row="1" Grid.Column="3" x:Name="SelectedYearTextBox"
+                             MinWidth="78"
                              Text="{Binding SelectedItem.Year, ElementName=OriginalGrid, UpdateSourceTrigger=PropertyChanged}"
                              AutomationProperties.LabeledBy="{Binding ElementName=SelectedYearLabel}"/>
                     <TextBlock Grid.Row="1" Grid.Column="4" x:Name="SelectedSeasonLabel"
                                Text="Season" VerticalAlignment="Center" Margin="10,0,0,0"/>
                     <TextBox Grid.Row="1" Grid.Column="5" x:Name="SelectedSeasonTextBox"
+                             MinWidth="78"
                              Text="{Binding SelectedItem.Season, ElementName=OriginalGrid, UpdateSourceTrigger=PropertyChanged}"
                              AutomationProperties.LabeledBy="{Binding ElementName=SelectedSeasonLabel}"/>
                     <TextBlock Grid.Row="1" Grid.Column="6" x:Name="SelectedEpisodeLabel"
                                Text="Episode" VerticalAlignment="Center" Margin="10,0,0,0"/>
                     <TextBox Grid.Row="1" Grid.Column="7" x:Name="SelectedEpisodeTextBox"
+                             MinWidth="78"
                              Text="{Binding SelectedItem.Episode, ElementName=OriginalGrid, UpdateSourceTrigger=PropertyChanged}"
                              AutomationProperties.LabeledBy="{Binding ElementName=SelectedEpisodeLabel}"/>
                     <TextBlock Grid.Row="1" Grid.Column="8" x:Name="SelectedEpisodeTitleLabel"
@@ -340,8 +346,8 @@
                     <TextBlock Grid.Row="2" Grid.Column="5" Text="Provider IDs"
                                VerticalAlignment="Center" Margin="10,12,0,0"/>
                     <TextBlock Grid.Row="2" Grid.Column="6" Grid.ColumnSpan="4"
-                               Margin="0,12,0,0" VerticalAlignment="Center"
-                               Foreground="{StaticResource MutedTextBrush}">
+                               Margin="14,12,0,0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource MutedTextBrush}">
                         <Run Text="TMDB "/>
                         <Run Text="{Binding SelectedItem.TmdbId, ElementName=OriginalGrid, TargetNullValue=—}"/>
                         <Run Text="   TVDB "/>
@@ -355,19 +361,20 @@
                              Text="Movies\{Title} ({Year}) {TmdbId}\{Title} ({Year}) {TmdbId}" Visibility="Collapsed"
                              AutomationProperties.LabeledBy="{Binding ElementName=CustomFormatLabel}"/>
 
-                    <Border Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="10" Background="{StaticResource AccentSoftBrush}" CornerRadius="4" Padding="10,7" Margin="0,14,0,0">
+                    <Border Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="10" Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="10,7" Margin="0,14,0,0">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="54"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Status" FontWeight="SemiBold" Foreground="{StaticResource AccentHoverBrush}"/>
-                            <TextBlock Grid.Column="1" x:Name="StatusTextBlock" Foreground="{StaticResource TextBrush}" TextWrapping="Wrap"
+                            <TextBlock Grid.Column="0" Text="Status" FontWeight="SemiBold" Foreground="{DynamicResource AccentHoverBrush}"/>
+                            <TextBlock Grid.Column="1" x:Name="StatusTextBlock" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap"
+                                       Margin="14,0,0,0"
                                        Text="Drop media files here, or use Add Files / Add Folder."
                                        AutomationProperties.Name="Application status"
                                        AutomationProperties.LiveSetting="Polite"/>

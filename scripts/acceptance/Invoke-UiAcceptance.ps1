@@ -24,6 +24,9 @@ param(
     [ValidateSet("Enabled", "Disabled")]
     [string] $ExpectedHighContrast,
 
+    [ValidateSet(100, 200)]
+    [int] $ExpectedTextScalePercent = 100,
+
     [ValidateRange(5, 120)]
     [int] $TimeoutSeconds = 20
 )
@@ -472,6 +475,43 @@ function Get-RequiredPatternsForControl {
     return @()
 }
 
+function Test-HasScrollableAncestor {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Automation.AutomationElement] $Element,
+
+        [Parameter(Mandatory)]
+        [System.Windows.Automation.AutomationElement] $Window
+    )
+
+    $walker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+    $current = $walker.GetParent($Element)
+    while ($null -ne $current) {
+        if ((Get-RuntimeIdKey $current) -eq (Get-RuntimeIdKey $Window)) {
+            return $false
+        }
+
+        try {
+            $pattern = $null
+            if ($current.TryGetCurrentPattern(
+                    [System.Windows.Automation.ScrollPattern]::Pattern,
+                    [ref]$pattern)) {
+                $scroll = [System.Windows.Automation.ScrollPattern]$pattern
+                if ($scroll.Current.VerticallyScrollable `
+                    -or $scroll.Current.HorizontallyScrollable) {
+                    return $true
+                }
+            }
+        } catch [System.Windows.Automation.ElementNotAvailableException] {
+            return $false
+        }
+
+        $current = $walker.GetParent($current)
+    }
+
+    return $false
+}
+
 function Audit-Window {
     param(
         [Parameter(Mandatory)]
@@ -517,7 +557,10 @@ function Audit-Window {
                 -and $bounds.Top -ge ($windowBounds.Top - 2) `
                 -and $bounds.Right -le ($windowBounds.Right + 2) `
                 -and $bounds.Bottom -le ($windowBounds.Bottom + 2)
-            if (-not $inside) {
+            if (-not $inside `
+                -and -not (Test-HasScrollableAncestor `
+                    -Element $element `
+                    -Window $Window)) {
                 $failures += [pscustomobject]@{
                     reason = "Focusable control is clipped or outside its window."
                     element = $identity
@@ -761,10 +804,30 @@ function Test-TabTraversal {
     }
 
     $reverseKeys = @($reverse | ForEach-Object { $_.runtimeId })
-    $forwardUnique = @($forwardKeys | Select-Object -Unique | Sort-Object)
-    $reverseUnique = @($reverseKeys | Select-Object -Unique | Sort-Object)
+    $containerControlTypes = @(
+        "ControlType.DataGrid",
+        "ControlType.List"
+    )
+    $forwardRingKeys = @(
+        $forward |
+            Where-Object {
+                $containerControlTypes -notcontains $_.controlType
+            } |
+            ForEach-Object { $_.runtimeId }
+    )
+    $reverseRingKeys = @(
+        $reverse |
+            Where-Object {
+                $containerControlTypes -notcontains $_.controlType
+            } |
+            ForEach-Object { $_.runtimeId }
+    )
+    $forwardUnique = @(
+        $forwardRingKeys | Select-Object -Unique | Sort-Object)
+    $reverseUnique = @(
+        $reverseRingKeys | Select-Object -Unique | Sort-Object)
     $sameRing =
-        (Compare-Object $forwardUnique $reverseUnique).Count -eq 0
+        @(Compare-Object $forwardUnique $reverseUnique).Count -eq 0
     $unnamedVisited = @(
         @($forward) + @($reverse) |
             Where-Object { [string]::IsNullOrWhiteSpace($_.name) }
@@ -835,6 +898,156 @@ function Set-UiaValue {
         throw "Element '$($Element.Current.AutomationId)' does not support ValuePattern."
     }
     $pattern.SetValue($Value)
+}
+
+function Get-UiaText {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Automation.AutomationElement] $Element
+    )
+
+    $pattern = $null
+    if ($Element.TryGetCurrentPattern(
+            [System.Windows.Automation.TextPattern]::Pattern,
+            [ref]$pattern)) {
+        return $pattern.DocumentRange.GetText(-1).Trim()
+    }
+
+    return $Element.Current.Name
+}
+
+function Wait-UiaTextContains {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Automation.AutomationElement] $Element,
+
+        [Parameter(Mandatory)]
+        [string] $Expected
+    )
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        $text = Get-UiaText -Element $Element
+        if ($text.Contains($Expected)) {
+            return $text
+        }
+
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    throw "Element '$($Element.Current.AutomationId)' did not report text containing '$Expected'."
+}
+
+function Wait-UiaElementEnabled {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Automation.AutomationElement] $Element
+    )
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        if ($Element.Current.IsEnabled) {
+            return
+        }
+
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    throw "Element '$($Element.Current.AutomationId)' did not become enabled."
+}
+
+function Open-SyntheticFixture {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Automation.AutomationElement] $MainWindow,
+
+        [Parameter(Mandatory)]
+        [string] $FixturePath
+    )
+
+    Invoke-UiaElement (
+        Find-UiaElement -Root $MainWindow -AutomationId "AddFilesButton")
+    $dialog = Wait-UiaWindow `
+        -ProcessId $script:TargetProcess.Id `
+        -Name "Open"
+    $fileName = Find-UiaElement -Root $dialog -AutomationId "1148"
+    if ($null -eq $fileName) {
+        throw "The native Open dialog did not expose its file-name control."
+    }
+
+    $valueTarget = $fileName.FindFirst(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::Edit))
+    if ($null -eq $valueTarget) {
+        $valueTarget = $fileName
+    }
+    if ($null -eq $valueTarget) {
+        throw "The native Open dialog file-name field is not editable."
+    }
+
+    [void][MediaFileRenamerAcceptanceNative]::SetForegroundWindow(
+        [IntPtr]$dialog.Current.NativeWindowHandle)
+    $valueTarget.SetFocus()
+    [System.Windows.Forms.SendKeys]::SendWait("^a")
+    [System.Windows.Forms.SendKeys]::SendWait($FixturePath)
+    Start-Sleep -Milliseconds 150
+
+    $open = $dialog.FindFirst(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+                "1"),
+            [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                [System.Windows.Automation.ControlType]::Button)))
+    if ($null -eq $open) {
+        $open = Find-UiaElement -Root $dialog -Name "Open"
+    }
+    if ($null -eq $open) {
+        throw "The native Open dialog did not expose its Open button."
+    }
+    Invoke-UiaElement $open
+    Wait-UiaWindow `
+        -ProcessId $script:TargetProcess.Id `
+        -Name "Open" `
+        -Absent | Out-Null
+}
+
+function Open-MatchPickerForFirstRow {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Automation.AutomationElement] $MainWindow
+    )
+
+    $grid = Find-UiaElement -Root $MainWindow -AutomationId "OriginalGrid"
+    $rows = $grid.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::DataItem))
+    if ($rows.Count -lt 1) {
+        throw "The synthetic media file did not appear in the Original Files grid."
+    }
+
+    $selection = $null
+    if (-not $rows[0].TryGetCurrentPattern(
+            [System.Windows.Automation.SelectionItemPattern]::Pattern,
+            [ref]$selection)) {
+        throw "The first Original Files row is not selectable through UI Automation."
+    }
+    $selection.Select()
+
+    $choose = Find-UiaElement `
+        -Root $MainWindow `
+        -AutomationId "ChooseSelectedButton"
+    Wait-UiaElementEnabled -Element $choose
+    Invoke-UiaElement $choose
+    return Wait-UiaWindow `
+        -ProcessId $script:TargetProcess.Id `
+        -Name "Choose Match"
 }
 
 function Close-WithEscape {
@@ -988,6 +1201,14 @@ $textScale = Get-ItemProperty `
     -LiteralPath "HKCU:\Software\Microsoft\Accessibility" `
     -Name "TextScaleFactor" `
     -ErrorAction SilentlyContinue
+$actualTextScalePercent = if ($null -eq $textScale) {
+    100
+} else {
+    [int]$textScale.TextScaleFactor
+}
+if ($actualTextScalePercent -ne $ExpectedTextScalePercent) {
+    throw "Expected Windows text size $ExpectedTextScalePercent%, but found $actualTextScalePercent%."
+}
 $environmentEvidence = [ordered]@{
     schemaVersion = 1
     runId = $runId
@@ -1006,11 +1227,7 @@ $environmentEvidence = [ordered]@{
         [Threading.Thread]::CurrentThread.ApartmentState.ToString()
     expectedDpi = $ExpectedDpi
     expectedHighContrast = $script:ExpectedHighContrastValue
-    textScalePercent = if ($null -eq $textScale) {
-        100
-    } else {
-        $textScale.TextScaleFactor
-    }
+    textScalePercent = $actualTextScalePercent
 }
 [IO.File]::WriteAllText(
     (Join-Path $resolvedArtifactRoot "environment.json"),
@@ -1033,6 +1250,33 @@ try {
     $tmdb = Find-UiaElement -Root $settings -AutomationId "TmdbApiKeyBox"
     $tvdb = Find-UiaElement -Root $settings -AutomationId "TvdbApiKeyBox"
     $pin = Find-UiaElement -Root $settings -AutomationId "TvdbPinBox"
+    $tmdbStatus = Find-UiaElement `
+        -Root $settings `
+        -AutomationId "TmdbTestStatusTextBlock"
+    $tvdbStatus = Find-UiaElement `
+        -Root $settings `
+        -AutomationId "TvdbTestStatusTextBlock"
+    Invoke-UiaElement (
+        Find-UiaElement -Root $settings -AutomationId "TestTmdbButton")
+    $tmdbMissingText = Wait-UiaTextContains `
+        -Element $tmdbStatus `
+        -Expected "Enter a TMDB API key"
+    Add-Check `
+        -Id "credentials.empty-tmdb" `
+        -Passed $true `
+        -Message "Packaged TMDB test rejects an empty credential with an actionable local message." `
+        -Evidence $tmdbMissingText
+    Invoke-UiaElement (
+        Find-UiaElement -Root $settings -AutomationId "TestTvdbButton")
+    $tvdbMissingText = Wait-UiaTextContains `
+        -Element $tvdbStatus `
+        -Expected "Enter a TVDB API key"
+    Add-Check `
+        -Id "credentials.empty-tvdb" `
+        -Passed $true `
+        -Message "Packaged TVDB test rejects an empty credential with an actionable local message." `
+        -Evidence $tvdbMissingText
+
     $dummySecret = "UIA-SECRET-$runId"
     Set-UiaValue -Element $tmdb -Value $dummySecret
     Set-UiaValue -Element $tvdb -Value "$dummySecret-TVDB"
@@ -1057,6 +1301,28 @@ try {
         -ProcessId $script:TargetProcess.Id `
         -Name "Media File Renamer"
     Audit-Capture-Traverse -Window $main -Slug "main"
+
+    $fixturePath = Join-Path `
+        $resolvedArtifactRoot `
+        "Synthetic.Movie.2024.mkv"
+    [IO.File]::WriteAllBytes($fixturePath, [byte[]](0..63))
+    Open-SyntheticFixture `
+        -MainWindow $main `
+        -FixturePath $fixturePath
+    $picker = Open-MatchPickerForFirstRow -MainWindow $main
+    Audit-Capture-Traverse -Window $picker -Slug "match-picker"
+    Close-WithEscape `
+        -Window $picker `
+        -Name "Choose Match" `
+        -Slug "match-picker" `
+        -FallbackCloseName "Cancel match selection"
+    Add-Check `
+        -Id "match-picker.synthetic-file" `
+        -Passed $true `
+        -Message "A synthetic media file reached the packaged manual Match Picker without provider credentials." `
+        -Evidence $fixturePath
+    Invoke-UiaElement (
+        Find-UiaElement -Root $main -AutomationId "ClearButton")
 
     $settings = Open-KeyboardMenuWindow `
         -MainWindow $main `

@@ -123,7 +123,7 @@ public sealed class DesktopWindowQualityTests
     [STATestMethod]
     public void SettingsWindow_IsResizableAccessibleAndKeepsCredentialsVisible()
     {
-        _ = Application.Current ?? new Application();
+        WpfTestApplication.EnsureResources();
         var settings = new AppSettings
         {
             TmdbApiKey = "visible-tmdb",
@@ -153,7 +153,7 @@ public sealed class DesktopWindowQualityTests
     [STATestMethod]
     public void SettingsWindow_FirstRunExplainsSafetyAndDefaultsToCopy()
     {
-        _ = Application.Current ?? new Application();
+        WpfTestApplication.EnsureResources();
         var window = new SettingsWindow(
             new AppSettings(),
             @"C:\settings.json",
@@ -174,7 +174,7 @@ public sealed class DesktopWindowQualityTests
     [STATestMethod]
     public void AboutWindow_ContainsProviderAttributionAndCredentialPolicy()
     {
-        _ = Application.Current ?? new Application();
+        WpfTestApplication.EnsureResources();
         var window = new AboutWindow();
 
         var tmdbNotice = (TextBlock)window.FindName("TmdbNoticeTextBlock");
@@ -193,7 +193,7 @@ public sealed class DesktopWindowQualityTests
     [STATestMethod]
     public void RecoveryWindow_WithNoInterruptedOperationsIsNonDestructive()
     {
-        _ = Application.Current ?? new Application();
+        WpfTestApplication.EnsureResources();
         using var directory = new DesktopTestDirectory();
         var window = new RecoveryWindow(
             new OperationJournalService(directory.Path),

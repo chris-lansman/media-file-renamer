@@ -14,7 +14,7 @@ public sealed class AccessibilityProductionTests
     [STATestMethod]
     public void MainWorkflow_HasLabelsLiveRegionsAndVisibleKeyboardFocus()
     {
-        _ = Application.Current ?? new Application();
+        WpfTestApplication.EnsureResources();
         var window = new MainWindow();
 
         AssertLabeledBy(window, "OutputFolderTextBox", "OutputFolderLabel");
@@ -50,7 +50,7 @@ public sealed class AccessibilityProductionTests
     [STATestMethod]
     public void Dialogs_HaveScrollableLayoutsAndConventionalKeyboardActions()
     {
-        _ = Application.Current ?? new Application();
+        WpfTestApplication.EnsureResources();
         using var temp = new TempDirectory();
         var journals = new OperationJournalService(temp.CreateDirectory("Journals"));
         var item = new MediaPreviewItem
@@ -95,7 +95,7 @@ public sealed class AccessibilityProductionTests
     [STATestMethod]
     public void MainWindow_RemainsScrollableAtTwoHundredPercentEffectiveSize()
     {
-        _ = Application.Current ?? new Application();
+        WpfTestApplication.EnsureResources();
         var window = new MainWindow();
 
         Assert.IsLessThanOrEqualTo(640, window.MinWidth);
@@ -111,7 +111,7 @@ public sealed class AccessibilityProductionTests
     [STATestMethod]
     public void SettingsStagingGrid_DefinesTheSettingsPathRow()
     {
-        _ = Application.Current ?? new Application();
+        WpfTestApplication.EnsureResources();
         var window = new SettingsWindow(new AppSettings(), @"C:\settings.json");
         var settingsPath = (TextBox)window.FindName("SettingsPathTextBox");
         var stagingGrid = (Grid)settingsPath.Parent;

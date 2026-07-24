@@ -9,9 +9,6 @@
         automation:AutomationProperties.Name="About Media File Renamer">
     <Window.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Themes/Theme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -28,15 +25,16 @@
                        automation:AutomationProperties.Name="Media File Renamer icon"/>
                 <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="Media File Renamer" FontSize="25" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="VersionTextBlock" Foreground="{StaticResource MutedTextBrush}"/>
+                    <TextBlock x:Name="VersionTextBlock" Foreground="{DynamicResource MutedTextBrush}"/>
                 </StackPanel>
             </StackPanel>
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
+                      HorizontalScrollBarVisibility="Disabled"
+                      automation:AutomationProperties.Name="About content">
             <StackPanel>
-                <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,0,0,14">
                     <StackPanel>
                         <TextBlock Text="Bring your own credentials" Style="{StaticResource SectionTitleStyle}"/>
@@ -46,7 +44,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,0,0,14">
                     <StackPanel>
                         <!-- Approved TMDB primary full logo from themoviedb.org/about/logos-attribution. -->
@@ -80,11 +78,11 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="8" Padding="18">
                     <StackPanel>
                         <TextBlock Text="TheTVDB" FontSize="20" FontWeight="Bold"
-                                   Foreground="{StaticResource AccentBrush}"
+                                   Foreground="{DynamicResource AccentBrush}"
                                    automation:AutomationProperties.Name="TheTVDB"/>
                         <TextBlock x:Name="TvdbAttributionTextBlock"
                                    Margin="0,8,0,0" TextWrapping="Wrap"
@@ -109,7 +107,7 @@
             <Button x:Name="CopyDiagnosticsButton" Content="_Copy diagnostic summary"
                     HorizontalAlignment="Left" Click="CopyDiagnostics_Click"
                     automation:AutomationProperties.Name="Copy diagnostic summary"/>
-            <Button Grid.Column="1" Content="_Close" IsCancel="True" Width="92"
+            <Button Grid.Column="1" Content="_Close" IsCancel="True" MinWidth="92"
                     Style="{StaticResource PrimaryButtonStyle}"
                     automation:AutomationProperties.Name="Close About window"/>
         </Grid>
