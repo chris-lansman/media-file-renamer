@@ -61,6 +61,52 @@ public sealed class CompanionFileTests
 public sealed class TransactionalRenameTests
 {
     [TestMethod]
+    public void Copy_PreservesMetadataForMediaAndCompanion()
+    {
+        using var temp = new TempDirectory();
+        var source = temp.CreateFile(
+            Path.Combine("Source", "Movie.mkv"),
+            "video");
+        var subtitle = temp.CreateFile(
+            Path.Combine("Source", "Movie.en.srt"),
+            "subtitle");
+        var destination = Path.Combine(temp.Path, "Output", "Renamed Movie.mkv");
+        var subtitleDestination = Path.Combine(
+            temp.Path,
+            "Output",
+            "Renamed Movie.en.srt");
+        var item = Item(source, destination);
+        item.CompanionPaths.Add(subtitle);
+
+        var mediaCreation = new DateTime(2019, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        var mediaLastWrite = new DateTime(2020, 4, 5, 6, 7, 8, DateTimeKind.Utc);
+        var companionCreation = new DateTime(2021, 5, 6, 7, 8, 9, DateTimeKind.Utc);
+        var companionLastWrite = new DateTime(2022, 6, 7, 8, 9, 10, DateTimeKind.Utc);
+        SetMetadata(source, mediaCreation, mediaLastWrite);
+        SetMetadata(subtitle, companionCreation, companionLastWrite);
+
+        try
+        {
+            var result = new RenameApplier().Apply([item], FileOperation.Copy);
+
+            Assert.HasCount(1, result.CompletedItems);
+            AssertMetadataMatches(source, destination);
+            AssertMetadataMatches(subtitle, subtitleDestination);
+            Assert.IsFalse(
+                File.GetAttributes(destination).HasFlag(FileAttributes.Temporary));
+            Assert.IsFalse(
+                File.GetAttributes(subtitleDestination).HasFlag(FileAttributes.Temporary));
+        }
+        finally
+        {
+            ClearReadOnly(source);
+            ClearReadOnly(subtitle);
+            ClearReadOnly(destination);
+            ClearReadOnly(subtitleDestination);
+        }
+    }
+
+    [TestMethod]
     public void Move_IncludesCompanionsAndUndoRestoresEntireOperation()
     {
         using var temp = new TempDirectory();
@@ -108,6 +154,9 @@ public sealed class TransactionalRenameTests
         var destination = Path.Combine(temp.Path, "Output", "Renamed.mkv");
         var item = Item(source, destination);
         item.CompanionPaths.Add(subtitle);
+        File.SetAttributes(
+            source,
+            File.GetAttributes(source) | FileAttributes.ReadOnly);
         var progress = new InlineProgress<FileTransferProgress>(value =>
         {
             if (value.CompletedFiles == 1 && File.Exists(subtitle))
@@ -116,16 +165,24 @@ public sealed class TransactionalRenameTests
             }
         });
 
-        var result = await new RenameApplier().ApplyAsync(
-            [item],
-            FileOperation.Copy,
-            progress);
+        try
+        {
+            var result = await new RenameApplier().ApplyAsync(
+                [item],
+                FileOperation.Copy,
+                progress);
 
-        Assert.IsTrue(result.RolledBack);
-        Assert.IsNotNull(result.FailureMessage);
-        Assert.IsFalse(File.Exists(destination));
-        Assert.IsTrue(File.Exists(source));
-        Assert.HasCount(0, result.CompletedItems);
+            Assert.IsTrue(result.RolledBack);
+            Assert.IsNotNull(result.FailureMessage);
+            Assert.IsFalse(File.Exists(destination));
+            Assert.IsTrue(File.Exists(source));
+            Assert.HasCount(0, result.CompletedItems);
+        }
+        finally
+        {
+            ClearReadOnly(source);
+            ClearReadOnly(destination);
+        }
     }
 
     [TestMethod]
@@ -211,6 +268,50 @@ public sealed class TransactionalRenameTests
         DestinationPath = destination,
         Status = "TMDB match"
     };
+
+    private static void SetMetadata(
+        string path,
+        DateTime creationTimeUtc,
+        DateTime lastWriteTimeUtc)
+    {
+        File.SetCreationTimeUtc(path, creationTimeUtc);
+        File.SetLastWriteTimeUtc(path, lastWriteTimeUtc);
+        File.SetAttributes(
+            path,
+            FileAttributes.Archive
+            | FileAttributes.Hidden
+            | FileAttributes.ReadOnly
+            | FileAttributes.Temporary);
+    }
+
+    private static void AssertMetadataMatches(string source, string destination)
+    {
+        Assert.AreEqual(
+            File.GetCreationTimeUtc(source),
+            File.GetCreationTimeUtc(destination));
+        Assert.AreEqual(
+            File.GetLastWriteTimeUtc(source),
+            File.GetLastWriteTimeUtc(destination));
+
+        const FileAttributes safeAttributes =
+            FileAttributes.Archive | FileAttributes.Hidden | FileAttributes.ReadOnly;
+        Assert.AreEqual(
+            File.GetAttributes(source) & safeAttributes,
+            File.GetAttributes(destination) & safeAttributes);
+    }
+
+    private static void ClearReadOnly(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var attributes = File.GetAttributes(path) & ~FileAttributes.ReadOnly;
+        File.SetAttributes(
+            path,
+            attributes == 0 ? FileAttributes.Normal : attributes);
+    }
 
     private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T>
     {
