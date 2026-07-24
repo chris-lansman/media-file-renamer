@@ -5,6 +5,8 @@ Notable user-visible changes are recorded here. This project follows
 
 ## Unreleased
 
+## 1.0.0 - 2026-07-24
+
 ### Added
 
 - Transactional staging safeguards, companion-file handling, operation journals, rollback, cancellation, and undo.
