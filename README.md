@@ -58,6 +58,19 @@ dist\MediaFileRenamer\MediaFileRenamer.exe
 
 The PowerShell script is only a developer helper for running from source.
 
+## Downloadable builds
+
+Every push to `main` that passes the test suite produces a downloadable Windows ZIP on that workflow run's GitHub Actions page. These development artifacts are retained for 30 days.
+
+Version tags such as `v0.1.0` produce a permanent GitHub Release containing:
+
+```text
+MediaFileRenamer-win-x64.zip
+MediaFileRenamer-win-x64.zip.sha256
+```
+
+The ZIP is a self-contained Windows x64 build and does not require a separate .NET installation. The checksum can be used to verify that the downloaded ZIP is unchanged.
+
 ## Development
 
 The solution targets .NET 10 on Windows. Build and run the complete test suite with:
