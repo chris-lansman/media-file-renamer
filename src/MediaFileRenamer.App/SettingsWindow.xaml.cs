@@ -21,9 +21,9 @@ public partial class SettingsWindow : Window
             DefaultOutputFolder = settings.DefaultOutputFolder
         };
 
-        TmdbApiKeyBox.Password = Settings.TmdbApiKey;
+        TmdbApiKeyBox.Text = Settings.TmdbApiKey;
         UseTmdbLookupCheckBox.IsChecked = Settings.UseTmdbLookup;
-        TvdbApiKeyBox.Password = Settings.TvdbApiKey;
+        TvdbApiKeyBox.Text = Settings.TvdbApiKey;
         UseTvdbFallbackCheckBox.IsChecked = Settings.UseTvdbFallback;
         DefaultOutputFolderTextBox.Text = Settings.DefaultOutputFolder;
         AutoMatchConfidenceTextBox.Text = Settings.AutoMatchConfidencePercent.ToString();
@@ -32,9 +32,9 @@ public partial class SettingsWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        Settings.TmdbApiKey = TmdbApiKeyBox.Password.Trim();
+        Settings.TmdbApiKey = TmdbApiKeyBox.Text.Trim();
         Settings.UseTmdbLookup = UseTmdbLookupCheckBox.IsChecked == true;
-        Settings.TvdbApiKey = TvdbApiKeyBox.Password.Trim();
+        Settings.TvdbApiKey = TvdbApiKeyBox.Text.Trim();
         Settings.UseTvdbFallback = UseTvdbFallbackCheckBox.IsChecked == true;
         Settings.AutoMatchConfidencePercent = ParseConfidence(AutoMatchConfidenceTextBox.Text);
         Settings.DefaultOutputFolder = string.IsNullOrWhiteSpace(DefaultOutputFolderTextBox.Text)

@@ -33,13 +33,13 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="TMDB API key" VerticalAlignment="Center"/>
-                <PasswordBox Grid.Row="0" Grid.Column="1" x:Name="TmdbApiKeyBox" MinHeight="32"/>
+                <TextBox Grid.Row="0" Grid.Column="1" x:Name="TmdbApiKeyBox" MinHeight="32"/>
 
                 <CheckBox Grid.Row="1" Grid.Column="1" x:Name="UseTmdbLookupCheckBox"
                           Content="Use TMDB lookup when matching" IsChecked="True" Margin="0,12,0,0"/>
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="TVDB API key" VerticalAlignment="Center" Margin="0,14,0,0"/>
-                <PasswordBox Grid.Row="2" Grid.Column="1" x:Name="TvdbApiKeyBox" MinHeight="32" Margin="0,14,0,0"/>
+                <TextBox Grid.Row="2" Grid.Column="1" x:Name="TvdbApiKeyBox" MinHeight="32" Margin="0,14,0,0"/>
 
                 <CheckBox Grid.Row="3" Grid.Column="1" x:Name="UseTvdbFallbackCheckBox"
                           Content="Use TVDB as fallback when available" IsChecked="True" Margin="0,12,0,0"/>
