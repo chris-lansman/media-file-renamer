@@ -8,15 +8,39 @@ namespace MediaFileRenamer.App;
 public partial class RecoveryWindow : Window
 {
     private readonly OperationJournalService _journals;
+    private readonly IReadOnlyList<InterruptedOperationRecovery>? _initialRecoveries;
+    private bool _loadedRecoveries;
 
     public ObservableCollection<InterruptedOperationRecovery> Recoveries { get; } = [];
 
-    public RecoveryWindow(OperationJournalService journals)
+    public RecoveryWindow(
+        OperationJournalService journals,
+        IReadOnlyList<InterruptedOperationRecovery>? initialRecoveries = null)
     {
         _journals = journals;
+        _initialRecoveries = initialRecoveries;
         InitializeComponent();
         DataContext = this;
-        RefreshRecoveries();
+        SetRecoveries(initialRecoveries ?? []);
+        if (initialRecoveries is null)
+        {
+            RecoveryStatusTextBlock.Text =
+                "Inspecting operation journals and recorded file paths...";
+        }
+    }
+
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (_loadedRecoveries)
+        {
+            return;
+        }
+
+        _loadedRecoveries = true;
+        if (_initialRecoveries is null)
+        {
+            await RefreshRecoveriesAsync();
+        }
     }
 
     private void RecoveryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -24,7 +48,7 @@ public partial class RecoveryWindow : Window
         UpdateSelectedRecovery();
     }
 
-    private void Rollback_Click(object sender, RoutedEventArgs e)
+    private async void Rollback_Click(object sender, RoutedEventArgs e)
     {
         if (RecoveryList.SelectedItem is not InterruptedOperationRecovery recovery
             || !recovery.CanRollback)
@@ -45,13 +69,26 @@ public partial class RecoveryWindow : Window
             return;
         }
 
-        var result = _journals.RecoverInterrupted(
-            recovery.Id,
-            InterruptedOperationAction.Rollback);
+        SetBusy(true, "Reinspecting paths and performing safe rollback...");
+        InterruptedOperationResult result;
+        try
+        {
+            result = await Task.Run(() => _journals.RecoverInterrupted(
+                recovery.Id,
+                InterruptedOperationAction.Rollback));
+        }
+        catch (Exception ex)
+        {
+            HandleUnexpectedRecoveryFailure(ex);
+            return;
+        }
+
+        SetBusy(false);
         ShowResult(result, "Recovery result");
+        await RefreshRecoveriesAsync();
     }
 
-    private void MarkResolved_Click(object sender, RoutedEventArgs e)
+    private async void MarkResolved_Click(object sender, RoutedEventArgs e)
     {
         if (RecoveryList.SelectedItem is not InterruptedOperationRecovery recovery)
         {
@@ -71,10 +108,23 @@ public partial class RecoveryWindow : Window
             return;
         }
 
-        var result = _journals.RecoverInterrupted(
-            recovery.Id,
-            InterruptedOperationAction.MarkResolved);
+        SetBusy(true, "Updating the recovery journal...");
+        InterruptedOperationResult result;
+        try
+        {
+            result = await Task.Run(() => _journals.RecoverInterrupted(
+                recovery.Id,
+                InterruptedOperationAction.MarkResolved));
+        }
+        catch (Exception ex)
+        {
+            HandleUnexpectedRecoveryFailure(ex);
+            return;
+        }
+
+        SetBusy(false);
         ShowResult(result, "Journal updated");
+        await RefreshRecoveriesAsync();
     }
 
     private void ShowResult(InterruptedOperationResult result, string title)
@@ -86,13 +136,44 @@ public partial class RecoveryWindow : Window
             title,
             MessageBoxButton.OK,
             result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
-        RefreshRecoveries();
     }
 
-    private void RefreshRecoveries()
+    private async Task RefreshRecoveriesAsync()
+    {
+        SetBusy(
+            true,
+            "Inspecting operation journals and recorded file paths...",
+            allowClose: true);
+        IReadOnlyList<InterruptedOperationRecovery> recoveries;
+        try
+        {
+            recoveries = await Task.Run(_journals.GetInterruptedOperations);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Current.Error(
+                "Could not inspect interrupted operations.",
+                ex);
+            RecoveryStatusTextBlock.Text =
+                "Recovery inspection failed. No media files were changed.";
+            SetBusy(false);
+            return;
+        }
+
+        if (!IsLoaded)
+        {
+            return;
+        }
+
+        SetBusy(false);
+        SetRecoveries(recoveries);
+    }
+
+    private void SetRecoveries(
+        IEnumerable<InterruptedOperationRecovery> recoveries)
     {
         Recoveries.Clear();
-        foreach (var recovery in _journals.GetInterruptedOperations())
+        foreach (var recovery in recoveries)
         {
             Recoveries.Add(recovery);
         }
@@ -108,6 +189,40 @@ public partial class RecoveryWindow : Window
 
         RecoveryList.SelectedIndex = 0;
         UpdateSelectedRecovery();
+    }
+
+    private void SetBusy(
+        bool isBusy,
+        string? message = null,
+        bool allowClose = false)
+    {
+        RecoveryList.IsEnabled = !isBusy;
+        RollbackButton.IsEnabled = !isBusy
+            && RecoveryList.SelectedItem is InterruptedOperationRecovery recovery
+            && recovery.CanRollback;
+        MarkResolvedButton.IsEnabled = !isBusy
+            && RecoveryList.SelectedItem is InterruptedOperationRecovery;
+        CloseButton.IsEnabled = !isBusy || allowClose;
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            RecoveryStatusTextBlock.Text = message;
+        }
+    }
+
+    private void HandleUnexpectedRecoveryFailure(Exception exception)
+    {
+        DiagnosticLog.Current.Error(
+            "An unexpected recovery operation failure occurred.",
+            exception);
+        SetBusy(false);
+        RecoveryStatusTextBlock.Text =
+            "Recovery stopped unexpectedly. No further automatic changes will be attempted.";
+        System.Windows.MessageBox.Show(
+            this,
+            "Recovery stopped unexpectedly. Review the listed paths and diagnostic log before retrying.",
+            "Recovery stopped",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 
     private void UpdateSelectedRecovery()

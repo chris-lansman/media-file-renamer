@@ -196,7 +196,8 @@ public sealed class DesktopWindowQualityTests
         _ = Application.Current ?? new Application();
         using var directory = new DesktopTestDirectory();
         var window = new RecoveryWindow(
-            new OperationJournalService(directory.Path));
+            new OperationJournalService(directory.Path),
+            []);
 
         Assert.HasCount(0, window.Recoveries);
         Assert.IsFalse(((Button)window.FindName("RollbackButton")).IsEnabled);
