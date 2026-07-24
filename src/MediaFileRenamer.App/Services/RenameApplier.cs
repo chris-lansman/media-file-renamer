@@ -394,6 +394,7 @@ public sealed class RenameApplier
             return;
         }
 
+        var metadata = FileMetadataSnapshot.CaptureBestEffort(transfer.SourcePath);
         await CopyVerifiedAsync(
             transfer.SourcePath,
             transfer.DestinationPath,
@@ -404,7 +405,7 @@ public sealed class RenameApplier
         {
             try
             {
-                File.Delete(transfer.SourcePath);
+                DeleteFile(transfer.SourcePath);
             }
             catch
             {
@@ -412,6 +413,8 @@ public sealed class RenameApplier
                 throw;
             }
         }
+
+        metadata.ApplyBestEffort(transfer.DestinationPath);
     }
 
     private static async Task CopyVerifiedAsync(
@@ -481,7 +484,7 @@ public sealed class RenameApplier
                 {
                     if (File.Exists(transfer.DestinationPath))
                     {
-                        File.Delete(transfer.DestinationPath);
+                        DeleteFile(transfer.DestinationPath);
                     }
                 }
                 else if (File.Exists(transfer.DestinationPath))
@@ -510,6 +513,43 @@ public sealed class RenameApplier
         }
 
         return errors;
+    }
+
+    private static void DeleteFile(string path)
+    {
+        var attributes = File.GetAttributes(path);
+        var clearedReadOnly = attributes.HasFlag(FileAttributes.ReadOnly);
+        if (clearedReadOnly)
+        {
+            var writableAttributes = attributes & ~FileAttributes.ReadOnly;
+            File.SetAttributes(
+                path,
+                writableAttributes == 0 ? FileAttributes.Normal : writableAttributes);
+        }
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch
+        {
+            if (clearedReadOnly && File.Exists(path))
+            {
+                try
+                {
+                    File.SetAttributes(path, attributes);
+                }
+                catch (Exception ex) when (
+                    ex is not StackOverflowException
+                    and not OutOfMemoryException)
+                {
+                    // Preserve the original delete failure; metadata restoration is
+                    // best-effort when the source remains in place.
+                }
+            }
+
+            throw;
+        }
     }
 
     private static bool IsSameVolume(string left, string right)
@@ -643,6 +683,81 @@ public sealed class RenameApplier
         string DestinationPath,
         bool IsCompanion,
         long Length);
+
+    private sealed record FileMetadataSnapshot(
+        DateTime? CreationTimeUtc,
+        DateTime? LastWriteTimeUtc,
+        FileAttributes? SafeAttributes)
+    {
+        private const FileAttributes PreservedAttributes =
+            FileAttributes.Archive
+            | FileAttributes.Hidden
+            | FileAttributes.ReadOnly;
+
+        public static FileMetadataSnapshot CaptureBestEffort(string source)
+        {
+            DateTime? creationTimeUtc = null;
+            DateTime? lastWriteTimeUtc = null;
+            FileAttributes? safeAttributes = null;
+
+            TryOptionalMetadata(() => creationTimeUtc = File.GetCreationTimeUtc(source));
+            TryOptionalMetadata(() => lastWriteTimeUtc = File.GetLastWriteTimeUtc(source));
+            TryOptionalMetadata(
+                () => safeAttributes = File.GetAttributes(source) & PreservedAttributes);
+
+            return new FileMetadataSnapshot(
+                creationTimeUtc,
+                lastWriteTimeUtc,
+                safeAttributes);
+        }
+
+        public void ApplyBestEffort(string destination)
+        {
+            if (CreationTimeUtc is { } creationTimeUtc)
+            {
+                TryOptionalMetadata(
+                    () => File.SetCreationTimeUtc(destination, creationTimeUtc));
+            }
+
+            if (LastWriteTimeUtc is { } lastWriteTimeUtc)
+            {
+                TryOptionalMetadata(
+                    () => File.SetLastWriteTimeUtc(destination, lastWriteTimeUtc));
+            }
+
+            if (SafeAttributes is { } safeAttributes)
+            {
+                TryOptionalMetadata(() =>
+                {
+                    var destinationAttributes = File.GetAttributes(destination);
+                    var combinedAttributes =
+                        (destinationAttributes & ~(PreservedAttributes | FileAttributes.Normal))
+                        | safeAttributes;
+                    File.SetAttributes(
+                        destination,
+                        combinedAttributes == 0
+                            ? FileAttributes.Normal
+                            : combinedAttributes);
+                });
+            }
+        }
+
+        private static void TryOptionalMetadata(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex) when (
+                ex is not StackOverflowException
+                and not OutOfMemoryException)
+            {
+                // Some removable, network, and virtual filesystems cannot read or
+                // set every Windows timestamp or attribute. File contents have
+                // already been verified, so optional metadata must not fail the transfer.
+            }
+        }
+    }
 
     private sealed record BatchPreflight(
         bool IsValid,
