@@ -2,6 +2,7 @@ using MediaFileRenamer.App;
 using MediaFileRenamer.App.Services;
 using MediaFileRenamer.App.ViewModels;
 using System.Net;
+using System.Reflection;
 using System.Text;
 
 namespace MediaFileRenamer.Tests;
@@ -26,14 +27,87 @@ public sealed class WindowSmokeTests
         var settings = new AppSettings
         {
             TmdbApiKey = "visible-tmdb-key",
-            TvdbApiKey = "visible-tvdb-key"
+            TvdbApiKey = "visible-tvdb-key",
+            TvdbPin = "visible-tvdb-pin"
         };
         var window = new SettingsWindow(settings, @"C:\settings.json");
 
         var tmdbBox = (System.Windows.Controls.TextBox)window.FindName("TmdbApiKeyBox");
         var tvdbBox = (System.Windows.Controls.TextBox)window.FindName("TvdbApiKeyBox");
+        var tvdbPinBox = (System.Windows.Controls.TextBox)window.FindName("TvdbPinBox");
         Assert.AreEqual("visible-tmdb-key", tmdbBox.Text);
         Assert.AreEqual("visible-tvdb-key", tvdbBox.Text);
+        Assert.AreEqual("visible-tvdb-pin", tvdbPinBox.Text);
+        window.Close();
+    }
+
+    [STATestMethod]
+    public void SettingsWindow_ScrollsFormWhenAvailableHeightIsLimited()
+    {
+        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        var window = new SettingsWindow(new AppSettings(), @"C:\settings.json")
+        {
+            Height = 420
+        };
+
+        var scrollViewer = (System.Windows.Controls.ScrollViewer)window.FindName(
+            "SettingsScrollViewer");
+        scrollViewer.Measure(new System.Windows.Size(600, 120));
+        scrollViewer.Arrange(new System.Windows.Rect(0, 0, 600, 120));
+        scrollViewer.UpdateLayout();
+
+        Assert.AreEqual(
+            System.Windows.Controls.ScrollBarVisibility.Auto,
+            scrollViewer.VerticalScrollBarVisibility);
+        Assert.IsGreaterThan(0, scrollViewer.ScrollableHeight);
+        window.Close();
+    }
+
+    [STATestMethod]
+    public void MainWindow_DisablesApplyUntilEveryItemIsReviewed()
+    {
+        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        using var temp = new TempDirectory();
+        var source = temp.CreateFile("Example Movie (2024).mkv");
+        var window = new MainWindow();
+        ((System.Windows.Controls.TextBox)window.FindName("OutputFolderTextBox")).Text =
+            Path.Combine(temp.Path, "Output");
+
+        var addSources = typeof(MainWindow).GetMethod(
+            "AddSources",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(addSources);
+        addSources.Invoke(window, [new[] { source }]);
+
+        var renameButton = (System.Windows.Controls.Button)window.FindName("RenameButton");
+        var reviewCount = (System.Windows.Controls.TextBlock)window.FindName("ReviewCountTextBlock");
+        Assert.IsFalse(renameButton.IsEnabled);
+        Assert.AreEqual("1 item needs review", reviewCount.Text);
+
+        window.PreviewItems.Single().Status = "Local movie choice";
+
+        Assert.IsTrue(renameButton.IsEnabled);
+        Assert.AreEqual("All items reviewed", reviewCount.Text);
+        window.Close();
+    }
+
+    [STATestMethod]
+    public void MatchPicker_WithoutApiKeyOffersLocalClassification()
+    {
+        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        var item = new MediaPreviewItem
+        {
+            SourcePath = @"C:\Media\Unknown.mkv",
+            TitleGuess = "Unknown"
+        };
+        var window = new MatchPickerWindow(item, null, item.TitleGuess, []);
+
+        var searchBox = (System.Windows.Controls.TextBox)window.FindName("SearchTextBox");
+        var searchButton = (System.Windows.Controls.Button)window.FindName("SearchButton");
+        var searchStatus = (System.Windows.Controls.TextBlock)window.FindName("SearchStatusTextBlock");
+        Assert.IsFalse(searchBox.IsEnabled);
+        Assert.IsFalse(searchButton.IsEnabled);
+        StringAssert.Contains(searchStatus.Text, "Use as Movie or Use as TV");
         window.Close();
     }
 }
@@ -44,8 +118,10 @@ public sealed class MediaPreviewItemTests
     [TestMethod]
     [DataRow("TMDB auto 100%", "Matched")]
     [DataRow("TMDB show match", "Matched")]
+    [DataRow("TVDB episode fallback", "Matched")]
     [DataRow("Needs review", "Review needed")]
     [DataRow("TV matched; episode needs review", "Review needed")]
+    [DataRow("TV matched; episode title needs review", "Review needed")]
     [DataRow("Type uncertain; matching folder and files", "Review needed")]
     [DataRow("Failed: destination file already exists", "Blocked")]
     [DataRow("Manual TMDB match", "Manual choice")]
@@ -55,6 +131,52 @@ public sealed class MediaPreviewItemTests
         var item = new MediaPreviewItem { Status = status };
 
         Assert.AreEqual(expected, item.MatchState);
+    }
+
+    [TestMethod]
+    public void MatchLabel_ShowsMetadataProvider()
+    {
+        var tmdbItem = new MediaPreviewItem { Status = "TMDB auto 100%" };
+        var tvdbItem = new MediaPreviewItem { Status = "TVDB episode fallback" };
+
+        Assert.AreEqual("Matched · TMDB", tmdbItem.MatchLabel);
+        Assert.AreEqual("Matched · TVDB", tvdbItem.MatchLabel);
+    }
+
+    [TestMethod]
+    public void RequiresReview_IsTrueUntilChoiceIsDeliberate()
+    {
+        var item = new MediaPreviewItem
+        {
+            MediaType = "Movie",
+            Status = "Parsed movie"
+        };
+
+        Assert.IsTrue(item.RequiresReview);
+
+        item.Status = "Local movie choice";
+
+        Assert.IsFalse(item.RequiresReview);
+        Assert.AreEqual("Manual choice", item.MatchState);
+    }
+
+    [TestMethod]
+    public void LocalTvChoice_StillRequiresResolvedEpisodeNumbers()
+    {
+        var item = new MediaPreviewItem
+        {
+            MediaType = "TV",
+            Status = "Local TV choice"
+        };
+
+        Assert.IsTrue(item.RequiresReview);
+        Assert.AreEqual("Review needed", item.MatchState);
+
+        item.Season = 1;
+        item.Episode = 2;
+
+        Assert.IsFalse(item.RequiresReview);
+        Assert.AreEqual("Manual choice", item.MatchState);
     }
 }
 
@@ -131,6 +253,41 @@ public sealed class MediaScannerTests
     }
 
     [TestMethod]
+    public void Scan_UsesParentSeriesForSpecialsFolderAndGenericFileName()
+    {
+        using var temp = new TempDirectory();
+        var showFolder = temp.CreateDirectory("Curious George");
+        var specialsFolder = temp.CreateDirectory(Path.Combine(showFolder, "Specials"));
+        temp.CreateFile(Path.Combine(specialsFolder, "Specials - S00E07.mkv"));
+
+        var item = new MediaScanner().Scan([showFolder]).Single();
+
+        Assert.AreEqual("TV", item.MediaType);
+        Assert.AreEqual("Curious George", item.TitleGuess);
+        Assert.AreEqual(showFolder, item.SourceGroupPath);
+        Assert.AreEqual(0, item.Season);
+        Assert.AreEqual(7, item.Episode);
+    }
+
+    [TestMethod]
+    public void Scan_PreservesEpisodeTitleAfterSeasonEpisodeCode()
+    {
+        using var temp = new TempDirectory();
+        var showFolder = temp.CreateDirectory("Curious George");
+        var specialsFolder = temp.CreateDirectory(Path.Combine(showFolder, "Specials"));
+        temp.CreateFile(Path.Combine(
+            specialsFolder,
+            "S00E08 - Curious George Goes to the Hospital.mkv"));
+
+        var item = new MediaScanner().Scan([showFolder]).Single();
+
+        Assert.AreEqual("Curious George", item.TitleGuess);
+        Assert.AreEqual("Curious George Goes to the Hospital", item.EpisodeTitle);
+        Assert.AreEqual(0, item.Season);
+        Assert.AreEqual(8, item.Episode);
+    }
+
+    [TestMethod]
     public void Scan_FileCountAloneDoesNotForceTv()
     {
         using var temp = new TempDirectory();
@@ -188,6 +345,116 @@ public sealed class MatchingTests
     }
 
     [TestMethod]
+    public async Task BuildMatch_ResolvesBothSeasonZeroEpisodeTitles()
+    {
+        var requestedPaths = new List<string>();
+        using var httpClient = new HttpClient(new StubHttpHandler(request =>
+        {
+            requestedPaths.Add(request.RequestUri!.AbsolutePath);
+            return TestHttp.JsonResponse(
+                """
+                {
+                  "episodes": [
+                    {
+                      "name": "Curious George Comes to America",
+                      "season_number": 0,
+                      "episode_number": 7
+                    },
+                    {
+                      "name": "Curious George Goes to the Hospital",
+                      "season_number": 0,
+                      "episode_number": 8
+                    }
+                  ]
+                }
+                """);
+        }));
+        var client = new TmdbClient("key", httpClient);
+        var firstItem = new MediaPreviewItem
+        {
+            MediaType = "TV",
+            TitleGuess = "Curious George",
+            Season = 0,
+            Episode = 7
+        };
+        var secondItem = new MediaPreviewItem
+        {
+            MediaType = "TV",
+            TitleGuess = "Curious George",
+            Season = 0,
+            Episode = 8
+        };
+        var candidate = new TmdbCandidate(
+            656,
+            "TV",
+            "Curious George",
+            2006,
+            "2006-09-04",
+            "",
+            "");
+
+        var firstMatch = await client.BuildMatchAsync(candidate, firstItem);
+        var secondMatch = await client.BuildMatchAsync(candidate, secondItem);
+
+        Assert.AreEqual("Curious George Comes to America", firstMatch.EpisodeTitle);
+        Assert.AreEqual(0, firstMatch.Season);
+        Assert.AreEqual(7, firstMatch.Episode);
+        Assert.AreEqual("Curious George Goes to the Hospital", secondMatch.EpisodeTitle);
+        Assert.AreEqual(0, secondMatch.Season);
+        Assert.AreEqual(8, secondMatch.Episode);
+        CollectionAssert.Contains(requestedPaths, "/3/tv/656/season/0");
+        Assert.HasCount(1, requestedPaths);
+    }
+
+    [TestMethod]
+    public async Task BuildMatch_TitleLookupIncludesSeasonZero()
+    {
+        var requestedPaths = new List<string>();
+        using var httpClient = new HttpClient(new StubHttpHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            requestedPaths.Add(path);
+            return path.EndsWith("/tv/656", StringComparison.Ordinal)
+                ? TestHttp.JsonResponse("""{"number_of_seasons":0}""")
+                : TestHttp.JsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        {
+                          "name": "Curious George Comes to America",
+                          "season_number": 0,
+                          "episode_number": 7
+                        }
+                      ]
+                    }
+                    """);
+        }));
+        var client = new TmdbClient("key", httpClient);
+        var item = new MediaPreviewItem
+        {
+            MediaType = "TV",
+            TitleGuess = "Curious George",
+            EpisodeTitle = "Curious George Comes to America"
+        };
+        var candidate = new TmdbCandidate(
+            656,
+            "TV",
+            "Curious George",
+            2006,
+            "2006-09-04",
+            "",
+            "");
+
+        var match = await client.BuildMatchAsync(candidate, item);
+
+        Assert.AreEqual("Curious George Comes to America", match.EpisodeTitle);
+        Assert.AreEqual(0, match.Season);
+        Assert.AreEqual(7, match.Episode);
+        CollectionAssert.Contains(requestedPaths, "/3/tv/656/season/0");
+        Assert.HasCount(2, requestedPaths);
+    }
+
+    [TestMethod]
     public void FindAutoMatch_AcceptsExactTitleAndYear()
     {
         var item = new MediaPreviewItem
@@ -234,6 +501,198 @@ public sealed class MatchingTests
         };
 
         Assert.IsFalse(TvShowIdentityMatcher.IsRelatedEpisode(first, second));
+    }
+}
+
+[TestClass]
+public sealed class TvdbFallbackTests
+{
+    [TestMethod]
+    public async Task FindEpisode_UsesDefaultOrderExactCoordinatesAndCachesResult()
+    {
+        var requests = new List<CapturedRequest>();
+        using var httpClient = new HttpClient(new StubHttpHandler(request =>
+        {
+            requests.Add(CapturedRequest.From(request));
+            return request.RequestUri!.AbsolutePath.EndsWith("/login", StringComparison.Ordinal)
+                ? TestHttp.JsonResponse("""{"data":{"token":"tvdb-token"}}""")
+                : TestHttp.JsonResponse(
+                    """
+                    {
+                      "data": {
+                        "episodes": [
+                          {
+                            "id": 7007,
+                            "name": "Curious George Comes to America",
+                            "seasonNumber": 0,
+                            "number": 7
+                          }
+                        ]
+                      }
+                    }
+                    """);
+        }));
+        var client = new TvdbClient("tvdb-key", "subscriber-pin", httpClient);
+
+        var first = await client.FindEpisodeAsync(123, 0, 7);
+        var second = await client.FindEpisodeAsync(123, 0, 7);
+
+        Assert.IsNotNull(first);
+        Assert.AreEqual("Curious George Comes to America", first.Name);
+        Assert.AreEqual(0, first.Season);
+        Assert.AreEqual(7, first.Episode);
+        Assert.AreSame(first, second);
+        Assert.HasCount(2, requests);
+        StringAssert.Contains(requests[0].Body, "\"apikey\":\"tvdb-key\"");
+        StringAssert.Contains(requests[0].Body, "\"pin\":\"subscriber-pin\"");
+        Assert.AreEqual(
+            "/v4/series/123/episodes/default?page=0&season=0&episodeNumber=7",
+            requests[1].PathAndQuery);
+        Assert.AreEqual("Bearer", requests[1].AuthorizationScheme);
+        Assert.AreEqual("tvdb-token", requests[1].AuthorizationParameter);
+    }
+
+    [TestMethod]
+    public async Task FindEpisode_RejectsResponseWithDifferentCoordinates()
+    {
+        using var httpClient = new HttpClient(new StubHttpHandler(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/login", StringComparison.Ordinal)
+                ? TestHttp.JsonResponse("""{"data":{"token":"tvdb-token"}}""")
+                : TestHttp.JsonResponse(
+                    """
+                    {
+                      "data": {
+                        "episodes": [
+                          {
+                            "id": 1001,
+                            "name": "Different Episode",
+                            "seasonNumber": 1,
+                            "number": 1
+                          }
+                        ]
+                      }
+                    }
+                    """)));
+        var client = new TvdbClient("tvdb-key", httpClient: httpClient);
+
+        var match = await client.FindEpisodeAsync(123, 0, 7);
+
+        Assert.IsNull(match);
+    }
+
+    [TestMethod]
+    public async Task Resolver_UsesTvdbWhenTmdbEpisodeIsMissing()
+    {
+        var tmdbRequests = new List<string>();
+        using var tmdbHttpClient = new HttpClient(new StubHttpHandler(request =>
+        {
+            tmdbRequests.Add(request.RequestUri!.AbsolutePath);
+            return request.RequestUri.AbsolutePath.EndsWith("/external_ids", StringComparison.Ordinal)
+                ? TestHttp.JsonResponse("""{"tvdb_id":123}""")
+                : new HttpResponseMessage(HttpStatusCode.NotFound);
+        }));
+        using var tvdbHttpClient = new HttpClient(new StubHttpHandler(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/login", StringComparison.Ordinal)
+                ? TestHttp.JsonResponse("""{"data":{"token":"tvdb-token"}}""")
+                : TestHttp.JsonResponse(
+                    """
+                    {
+                      "data": {
+                        "episodes": [
+                          {
+                            "id": 7007,
+                            "name": "Curious George Comes to America",
+                            "seasonNumber": 0,
+                            "number": 7
+                          }
+                        ]
+                      }
+                    }
+                    """)));
+        var tmdbClient = new TmdbClient("tmdb-key", tmdbHttpClient);
+        var tvdbClient = new TvdbClient("tvdb-key", httpClient: tvdbHttpClient);
+        var item = new MediaPreviewItem
+        {
+            MediaType = "TV",
+            TitleGuess = "Curious George",
+            Season = 0,
+            Episode = 7
+        };
+        var candidate = new TmdbCandidate(
+            656,
+            "TV",
+            "Curious George",
+            2006,
+            "2006-09-04",
+            "",
+            "");
+
+        var resolution = await new TvEpisodeMetadataResolver().ResolveAsync(
+            tmdbClient,
+            tvdbClient,
+            candidate,
+            item);
+
+        Assert.AreEqual(EpisodeMetadataSource.Tvdb, resolution.EpisodeSource);
+        Assert.AreEqual(
+            "Curious George Comes to America",
+            resolution.Match.EpisodeTitle);
+        CollectionAssert.Contains(tmdbRequests, "/3/tv/656/external_ids");
+    }
+
+    [TestMethod]
+    public async Task Resolver_LeavesConflictingFilenameTitleForReview()
+    {
+        using var tmdbHttpClient = new HttpClient(new StubHttpHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.NotFound)));
+        using var tvdbHttpClient = new HttpClient(new StubHttpHandler(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/login", StringComparison.Ordinal)
+                ? TestHttp.JsonResponse("""{"data":{"token":"tvdb-token"}}""")
+                : TestHttp.JsonResponse(
+                    """
+                    {
+                      "data": {
+                        "episodes": [
+                          {
+                            "id": 7007,
+                            "name": "Canonical Episode Title",
+                            "seasonNumber": 0,
+                            "number": 7
+                          }
+                        ]
+                      }
+                    }
+                    """)));
+        var tmdbClient = new TmdbClient("tmdb-key", tmdbHttpClient);
+        var tvdbClient = new TvdbClient("tvdb-key", httpClient: tvdbHttpClient);
+        var item = new MediaPreviewItem
+        {
+            MediaType = "TV",
+            TitleGuess = "Show",
+            Season = 0,
+            Episode = 7,
+            EpisodeTitle = "A Different Episode"
+        };
+        var candidate = new TmdbCandidate(
+            10,
+            "TV",
+            "Show",
+            2020,
+            "2020-01-01",
+            "",
+            "")
+        {
+            TvdbId = 123
+        };
+
+        var resolution = await new TvEpisodeMetadataResolver().ResolveAsync(
+            tmdbClient,
+            tvdbClient,
+            candidate,
+            item);
+
+        Assert.AreEqual(EpisodeMetadataSource.Tmdb, resolution.EpisodeSource);
+        Assert.IsNull(resolution.Match.EpisodeTitle);
     }
 }
 
@@ -451,13 +910,50 @@ public sealed class RenameApplierTests
         Assert.AreEqual(0, result.CompletedItems.Count);
     }
 
+    [TestMethod]
+    public void Apply_BlocksEntireBatchWhenOneItemRequiresReview()
+    {
+        using var temp = new TempDirectory();
+        var safeSource = temp.CreateFile("Matched.mkv", "safe");
+        var reviewSource = temp.CreateFile("Ambiguous.mkv", "review");
+        var safeItem = Item(safeSource, Path.Combine(temp.Path, "Output", "Matched.mkv"));
+        var reviewItem = Item(reviewSource, Path.Combine(temp.Path, "Output", "Ambiguous.mkv"));
+        reviewItem.Status = "Needs review";
+
+        var result = new RenameApplier().Apply([safeItem, reviewItem], FileOperation.Move);
+
+        Assert.IsTrue(File.Exists(safeSource));
+        Assert.IsTrue(File.Exists(reviewSource));
+        Assert.IsFalse(File.Exists(safeItem.DestinationPath));
+        Assert.IsFalse(File.Exists(reviewItem.DestinationPath));
+        Assert.AreEqual(0, result.CompletedItems.Count);
+    }
+
+    [TestMethod]
+    public void Apply_AllowsMatchedAndManualItemsInSameBatch()
+    {
+        using var temp = new TempDirectory();
+        var matchedSource = temp.CreateFile("Matched.mkv", "matched");
+        var manualSource = temp.CreateFile("Manual.mkv", "manual");
+        var matchedItem = Item(matchedSource, Path.Combine(temp.Path, "Output", "Matched.mkv"));
+        var manualItem = Item(manualSource, Path.Combine(temp.Path, "Output", "Manual.mkv"));
+        manualItem.Status = "Local movie choice";
+
+        var result = new RenameApplier().Apply([matchedItem, manualItem], FileOperation.Copy);
+
+        Assert.AreEqual(2, result.CompletedItems.Count);
+        Assert.IsTrue(File.Exists(matchedItem.DestinationPath));
+        Assert.IsTrue(File.Exists(manualItem.DestinationPath));
+    }
+
     private static MediaPreviewItem Item(string source, string destination) => new()
     {
         SourcePath = source,
         Extension = ".mkv",
         MediaType = "Movie",
         MatchedTitle = "Movie",
-        DestinationPath = destination
+        DestinationPath = destination,
+        Status = "TMDB match"
     };
 }
 
@@ -506,6 +1002,24 @@ internal sealed class StubHttpHandler(Func<HttpRequestMessage, HttpResponseMessa
         CancellationToken cancellationToken)
     {
         return Task.FromResult(responder(request));
+    }
+}
+
+internal sealed record CapturedRequest(
+    string Method,
+    string PathAndQuery,
+    string AuthorizationScheme,
+    string AuthorizationParameter,
+    string Body)
+{
+    public static CapturedRequest From(HttpRequestMessage request)
+    {
+        return new CapturedRequest(
+            request.Method.Method,
+            request.RequestUri?.PathAndQuery ?? "",
+            request.Headers.Authorization?.Scheme ?? "",
+            request.Headers.Authorization?.Parameter ?? "",
+            request.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? "");
     }
 }
 

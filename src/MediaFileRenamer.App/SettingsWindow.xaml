@@ -1,15 +1,31 @@
 <Window x:Class="MediaFileRenamer.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Settings" Height="530" Width="680" ResizeMode="NoResize"
-        WindowStartupLocation="CenterOwner">
+        xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
+        Title="Settings" Height="720" Width="760" MinHeight="500" MinWidth="620"
+        ResizeMode="CanResize" WindowStartupLocation="CenterOwner"
+        Icon="Assets/app-icon.ico"
+        automation:AutomationProperties.Name="Media File Renamer settings">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/Theme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+            <Style TargetType="GroupBox">
+                <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="16"/>
+            </Style>
+            <Style x:Key="SettingsLabelStyle" TargetType="Label">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                <Setter Property="Padding" Value="0"/>
+            </Style>
         </ResourceDictionary>
     </Window.Resources>
+
     <Grid Margin="24,22">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -18,59 +34,162 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,18">
-            <TextBlock Text="Settings" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-            <TextBlock Text="Metadata sources and default staging preferences for this Windows user."
-                       Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"/>
+            <TextBlock Text="Settings" FontSize="26" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextBrush}"/>
+            <TextBlock Text="Metadata sources, matching behavior, and staging preferences for this Windows user."
+                       Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
+                       TextWrapping="Wrap"/>
         </StackPanel>
 
-        <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="18">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="130"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+        <ScrollViewer Grid.Row="1" x:Name="SettingsScrollViewer"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      CanContentScroll="False"
+                      PanningMode="VerticalOnly"
+                      automation:AutomationProperties.Name="Settings options">
+            <StackPanel Margin="0,0,4,0">
+                <GroupBox Header="Metadata providers" Margin="0,0,0,14">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="TMDB API key" Style="{StaticResource FieldLabelStyle}" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="0" Grid.Column="1" x:Name="TmdbApiKeyBox" MinHeight="32"/>
+                        <Label Grid.Row="0" Grid.Column="0" Content="_TMDB API key"
+                               Target="{Binding ElementName=TmdbApiKeyBox}"
+                               Style="{StaticResource SettingsLabelStyle}"
+                               VerticalContentAlignment="Center"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="TmdbApiKeyBox"
+                                 automation:AutomationProperties.Name="TMDB API key"/>
+                        <Button Grid.Row="0" Grid.Column="2" x:Name="TestTmdbButton"
+                                Content="_Test TMDB" Margin="8,0,0,0"
+                                Click="TestTmdb_Click"
+                                automation:AutomationProperties.Name="Test TMDB connection"/>
 
-                <CheckBox Grid.Row="1" Grid.Column="1" x:Name="UseTmdbLookupCheckBox"
-                          Content="Use TMDB lookup when matching" IsChecked="True" Margin="0,12,0,0"/>
+                        <CheckBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                  x:Name="UseTmdbLookupCheckBox"
+                                  Content="Use TMDB lookup when matching"
+                                  IsChecked="True" Margin="0,10,0,0"/>
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="TVDB API key" Style="{StaticResource FieldLabelStyle}" VerticalAlignment="Center" Margin="0,14,0,0"/>
-                <TextBox Grid.Row="2" Grid.Column="1" x:Name="TvdbApiKeyBox" MinHeight="32" Margin="0,14,0,0"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                                   x:Name="TmdbTestStatusTextBlock" Margin="0,7,0,0"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   automation:AutomationProperties.Name="TMDB connection status"
+                                   automation:AutomationProperties.LiveSetting="Polite"/>
 
-                <CheckBox Grid.Row="3" Grid.Column="1" x:Name="UseTvdbFallbackCheckBox"
-                          Content="Use TVDB as fallback when available" IsChecked="True" Margin="0,12,0,0"/>
+                        <Separator Grid.Row="3" Grid.ColumnSpan="3" Margin="0,14"/>
 
-                <TextBlock Grid.Row="4" Grid.Column="0" Text="Output folder" Style="{StaticResource FieldLabelStyle}" VerticalAlignment="Center" Margin="0,14,0,0"/>
-                <TextBox Grid.Row="4" Grid.Column="1" x:Name="DefaultOutputFolderTextBox" Margin="0,14,8,0"/>
-                <Button Grid.Row="4" Grid.Column="2" Content="Browse" MinHeight="32" Margin="0,14,0,0" Click="BrowseOutput_Click"/>
+                        <Label Grid.Row="4" Grid.Column="0" Content="T_VDB API key"
+                               Target="{Binding ElementName=TvdbApiKeyBox}"
+                               Style="{StaticResource SettingsLabelStyle}"
+                               VerticalContentAlignment="Center"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="TvdbApiKeyBox"
+                                 automation:AutomationProperties.Name="TVDB API key"/>
 
-                <TextBlock Grid.Row="5" Grid.Column="0" Text="Auto-match" Style="{StaticResource FieldLabelStyle}" VerticalAlignment="Center" Margin="0,14,0,0"/>
-                <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,14,0,0">
-                    <TextBox x:Name="AutoMatchConfidenceTextBox" Width="64"/>
-                    <TextBlock Text="% confidence before choosing automatically" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="{StaticResource MutedTextBrush}"/>
-                </StackPanel>
+                        <Label Grid.Row="5" Grid.Column="0" Content="TVDB _PIN"
+                               Target="{Binding ElementName=TvdbPinBox}"
+                               Style="{StaticResource SettingsLabelStyle}"
+                               VerticalContentAlignment="Center" Margin="0,10,0,0"/>
+                        <TextBox Grid.Row="5" Grid.Column="1" x:Name="TvdbPinBox"
+                                 Margin="0,10,0,0"
+                                 ToolTip="Optional subscriber PIN for TVDB user-supported API keys"
+                                 automation:AutomationProperties.Name="TVDB subscriber PIN"/>
+                        <Button Grid.Row="5" Grid.Column="2" x:Name="TestTvdbButton"
+                                Content="T_est TVDB" Margin="8,10,0,0"
+                                Click="TestTvdb_Click"
+                                automation:AutomationProperties.Name="Test TVDB connection"/>
 
-                <TextBlock Grid.Row="6" Grid.Column="0" Text="Settings file" Style="{StaticResource FieldLabelStyle}" VerticalAlignment="Top" Margin="0,14,0,0"/>
-                <TextBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" x:Name="SettingsPathTextBox" Margin="0,14,0,0"
-                         IsReadOnly="True" TextWrapping="Wrap" MinHeight="48"/>
-            </Grid>
-        </Border>
+                        <CheckBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2"
+                                  x:Name="UseTvdbFallbackCheckBox"
+                                  Content="Use TVDB for series and episode fallback"
+                                  IsChecked="True" Margin="0,10,0,0"/>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-            <Button Content="Cancel" Width="92" Margin="0,0,8,0" Style="{StaticResource QuietButtonStyle}" Click="Cancel_Click"/>
-            <Button Content="Save Settings" Width="112" Style="{StaticResource PrimaryButtonStyle}" Click="Save_Click"/>
+                        <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2"
+                                   x:Name="TvdbTestStatusTextBlock" Margin="0,7,0,0"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   automation:AutomationProperties.Name="TVDB connection status"
+                                   automation:AutomationProperties.LiveSetting="Polite"/>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Matching" Margin="0,0,0,14">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Label Grid.Column="0" Content="_Auto-match"
+                               Target="{Binding ElementName=AutoMatchConfidenceTextBox}"
+                               Style="{StaticResource SettingsLabelStyle}"
+                               VerticalContentAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <TextBox x:Name="AutoMatchConfidenceTextBox" Width="64"
+                                     automation:AutomationProperties.Name="Automatic match confidence percentage"/>
+                            <TextBlock Text="% confidence before choosing automatically"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Staging">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="_Output folder"
+                               Target="{Binding ElementName=DefaultOutputFolderTextBox}"
+                               Style="{StaticResource SettingsLabelStyle}"
+                               VerticalContentAlignment="Center"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="DefaultOutputFolderTextBox"
+                                 Margin="0,0,8,0"
+                                 automation:AutomationProperties.Name="Default output folder"/>
+                        <Button Grid.Row="0" Grid.Column="2" Content="_Browse..." Click="BrowseOutput_Click"
+                                automation:AutomationProperties.Name="Browse for default output folder"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Content="Settings file"
+                               Target="{Binding ElementName=SettingsPathTextBox}"
+                               Style="{StaticResource SettingsLabelStyle}"
+                               VerticalContentAlignment="Top" Margin="0,14,0,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                 x:Name="SettingsPathTextBox" Margin="0,14,0,0"
+                                 IsReadOnly="True" TextWrapping="Wrap" MinHeight="48"
+                                 automation:AutomationProperties.Name="Settings file path"/>
+                    </Grid>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="_Cancel" Width="92" Margin="0,0,8,0"
+                    IsCancel="True" Style="{StaticResource QuietButtonStyle}"
+                    Click="Cancel_Click"
+                    automation:AutomationProperties.Name="Cancel settings"/>
+            <Button Content="_Save Settings" Width="126"
+                    IsDefault="True" Style="{StaticResource PrimaryButtonStyle}"
+                    Click="Save_Click"
+                    automation:AutomationProperties.Name="Save settings"/>
         </StackPanel>
     </Grid>
 </Window>
