@@ -2,13 +2,13 @@ using MediaFileRenamer.App.ViewModels;
 
 namespace MediaFileRenamer.App.Services;
 
-public sealed record TvShowIdentity(int TmdbId, string Title, int? Year);
+public sealed record TvShowIdentity(int? TmdbId, int? TvdbId, string Title, int? Year);
 
 public static class TvShowIdentityMatcher
 {
     public static TvShowIdentity FromCandidate(TmdbCandidate candidate)
     {
-        return new TvShowIdentity(candidate.Id, candidate.Title, candidate.Year);
+        return new TvShowIdentity(candidate.TmdbId, candidate.TvdbId, candidate.Title, candidate.Year);
     }
 
     public static bool IsRelatedEpisode(MediaPreviewItem source, MediaPreviewItem candidate)
@@ -32,6 +32,7 @@ public static class TvShowIdentityMatcher
     {
         item.MediaType = "TV";
         item.TmdbId = identity.TmdbId;
+        item.TvdbId = identity.TvdbId;
         item.MatchedTitle = identity.Title;
         item.Year = identity.Year ?? item.Year;
     }
