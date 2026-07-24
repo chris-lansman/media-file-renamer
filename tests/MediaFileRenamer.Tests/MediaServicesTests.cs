@@ -18,6 +18,24 @@ public sealed class WindowSmokeTests
         Assert.AreEqual("Media File Renamer", window.Title);
         window.Close();
     }
+
+    [STATestMethod]
+    public void SettingsWindow_DisplaysSavedApiKeysAsPlainText()
+    {
+        _ = System.Windows.Application.Current ?? new System.Windows.Application();
+        var settings = new AppSettings
+        {
+            TmdbApiKey = "visible-tmdb-key",
+            TvdbApiKey = "visible-tvdb-key"
+        };
+        var window = new SettingsWindow(settings, @"C:\settings.json");
+
+        var tmdbBox = (System.Windows.Controls.TextBox)window.FindName("TmdbApiKeyBox");
+        var tvdbBox = (System.Windows.Controls.TextBox)window.FindName("TvdbApiKeyBox");
+        Assert.AreEqual("visible-tmdb-key", tmdbBox.Text);
+        Assert.AreEqual("visible-tvdb-key", tvdbBox.Text);
+        window.Close();
+    }
 }
 
 [TestClass]
