@@ -51,11 +51,41 @@ public sealed class RenamePlanner
         return destination;
     }
 
+    public IReadOnlyList<CompanionDestination> BuildCompanionDestinations(MediaPreviewItem item)
+    {
+        if (string.IsNullOrWhiteSpace(item.DestinationPath) || item.CompanionPaths.Count == 0)
+        {
+            return [];
+        }
+
+        var sourceStem = Path.GetFileNameWithoutExtension(item.SourcePath);
+        var destinationStem = Path.GetFileNameWithoutExtension(item.DestinationPath);
+        var destinationDirectory = Path.GetDirectoryName(item.DestinationPath)
+            ?? throw new ArgumentException("The media destination has no parent directory.");
+
+        return item.CompanionPaths
+            .Select(source =>
+            {
+                var companionStem = Path.GetFileNameWithoutExtension(source);
+                var suffix = companionStem.Length > sourceStem.Length
+                    ? companionStem[sourceStem.Length..]
+                    : "";
+                var destination = Path.Combine(
+                    destinationDirectory,
+                    destinationStem + suffix + Path.GetExtension(source));
+                return new CompanionDestination(source, destination);
+            })
+            .ToList();
+    }
+
     private static string BuildMoviePath(MediaPreviewItem item, string title, string extension, RenamePreset preset)
     {
         var year = item.Year is null ? "" : $" ({item.Year})";
-        var idTag = BuildTmdbIdTag(item);
-        var displayName = $"{title}{year}{idTag}";
+        var idTag = BuildProviderIdTag(item);
+        var editionTag = string.IsNullOrWhiteSpace(item.Edition)
+            ? ""
+            : $" {{edition-{Sanitize(item.Edition)}}}";
+        var displayName = $"{title}{year}{idTag}{editionTag}";
         var fileName = $"{displayName}{extension}";
 
         return preset == RenamePreset.FlatReview
@@ -70,8 +100,12 @@ public sealed class RenamePlanner
         var episodeTitle = string.IsNullOrWhiteSpace(item.EpisodeTitle)
             ? ""
             : $" - {Sanitize(item.EpisodeTitle)}";
-        var fileName = $"{title} - S{season:00}E{episode:00}{episodeTitle}{extension}";
-        var showFolder = $"{title}{BuildYear(item)}{BuildTmdbIdTag(item)}";
+        var episodeRange = item.EpisodeEnd is not null && item.EpisodeEnd > episode
+            ? $"-E{item.EpisodeEnd:00}"
+            : "";
+        var part = item.PartNumber is null ? "" : $" - pt{item.PartNumber}";
+        var fileName = $"{title} - S{season:00}E{episode:00}{episodeRange}{episodeTitle}{part}{extension}";
+        var showFolder = $"{title}{BuildYear(item)}{BuildProviderIdTag(item)}";
 
         return preset == RenamePreset.FlatReview
             ? Path.Combine("TV Shows", fileName)
@@ -92,8 +126,21 @@ public sealed class RenamePlanner
             .Replace("{Year}", item.Year?.ToString() ?? "", StringComparison.OrdinalIgnoreCase)
             .Replace("{Season}", item.Season?.ToString("00") ?? "00", StringComparison.OrdinalIgnoreCase)
             .Replace("{Episode}", item.Episode?.ToString("00") ?? "00", StringComparison.OrdinalIgnoreCase)
+            .Replace("{EpisodeEnd}", item.EpisodeEnd?.ToString("00") ?? "", StringComparison.OrdinalIgnoreCase)
+            .Replace("{AbsoluteEpisode}", item.AbsoluteEpisode?.ToString("000") ?? "", StringComparison.OrdinalIgnoreCase)
+            .Replace("{AirDate}", item.AirDate?.ToString("yyyy-MM-dd") ?? "", StringComparison.OrdinalIgnoreCase)
+            .Replace("{Part}", item.PartNumber?.ToString() ?? "", StringComparison.OrdinalIgnoreCase)
             .Replace("{EpisodeTitle}", Sanitize(item.EpisodeTitle), StringComparison.OrdinalIgnoreCase)
             .Replace("{TmdbId}", BuildTmdbIdTag(item).TrimStart(), StringComparison.OrdinalIgnoreCase)
+            .Replace("{TvdbId}", BuildTvdbIdTag(item).TrimStart(), StringComparison.OrdinalIgnoreCase)
+            .Replace("{ProviderId}", BuildProviderIdTag(item).TrimStart(), StringComparison.OrdinalIgnoreCase)
+            .Replace("{Edition}", Sanitize(item.Edition), StringComparison.OrdinalIgnoreCase)
+            .Replace(
+                "{EditionTag}",
+                string.IsNullOrWhiteSpace(item.Edition)
+                    ? ""
+                    : $"{{edition-{Sanitize(item.Edition)}}}",
+                StringComparison.OrdinalIgnoreCase)
             .Trim();
 
         return relative.EndsWith(extension, StringComparison.OrdinalIgnoreCase)
@@ -132,6 +179,16 @@ public sealed class RenamePlanner
         return item.TmdbId is null ? "" : $" {{tmdb-{item.TmdbId}}}";
     }
 
+    private static string BuildTvdbIdTag(MediaPreviewItem item)
+    {
+        return item.TvdbId is null ? "" : $" {{tvdb-{item.TvdbId}}}";
+    }
+
+    private static string BuildProviderIdTag(MediaPreviewItem item)
+    {
+        return item.TmdbId is not null ? BuildTmdbIdTag(item) : BuildTvdbIdTag(item);
+    }
+
     private static string Sanitize(string value)
     {
         var invalid = Path.GetInvalidFileNameChars();
@@ -152,3 +209,5 @@ public sealed class RenamePlanner
         return ReservedWindowsNames.Contains(baseName) ? sanitized + "_" : sanitized;
     }
 }
+
+public sealed record CompanionDestination(string SourcePath, string DestinationPath);
