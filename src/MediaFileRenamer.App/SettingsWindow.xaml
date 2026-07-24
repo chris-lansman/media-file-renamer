@@ -1,0 +1,66 @@
+<Window x:Class="MediaFileRenamer.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings" Height="500" Width="640" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="#F4F6F8">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock Text="Settings" FontSize="24" FontWeight="SemiBold" Foreground="#20262E"/>
+            <TextBlock Text="Saved locally for this Windows user." Foreground="#566171" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <Border Grid.Row="1" Background="White" BorderBrush="#D7DCE2" BorderThickness="1" Padding="14">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="TMDB API key" VerticalAlignment="Center"/>
+                <PasswordBox Grid.Row="0" Grid.Column="1" x:Name="TmdbApiKeyBox" MinHeight="32"/>
+
+                <CheckBox Grid.Row="1" Grid.Column="1" x:Name="UseTmdbLookupCheckBox"
+                          Content="Use TMDB lookup when matching" IsChecked="True" Margin="0,12,0,0"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="TVDB API key" VerticalAlignment="Center" Margin="0,14,0,0"/>
+                <PasswordBox Grid.Row="2" Grid.Column="1" x:Name="TvdbApiKeyBox" MinHeight="32" Margin="0,14,0,0"/>
+
+                <CheckBox Grid.Row="3" Grid.Column="1" x:Name="UseTvdbFallbackCheckBox"
+                          Content="Use TVDB as fallback when available" IsChecked="True" Margin="0,12,0,0"/>
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Output folder" VerticalAlignment="Center" Margin="0,14,0,0"/>
+                <TextBox Grid.Row="4" Grid.Column="1" x:Name="DefaultOutputFolderTextBox" Margin="0,14,0,0"/>
+
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="Auto-match" VerticalAlignment="Center" Margin="0,14,0,0"/>
+                <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,14,0,0">
+                    <TextBox x:Name="AutoMatchConfidenceTextBox" Width="64"/>
+                    <TextBlock Text="% confidence before choosing automatically" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#566171"/>
+                </StackPanel>
+
+                <TextBlock Grid.Row="6" Grid.Column="0" Text="Settings file" VerticalAlignment="Top" Margin="0,14,0,0"/>
+                <TextBox Grid.Row="6" Grid.Column="1" x:Name="SettingsPathTextBox" Margin="0,14,0,0"
+                         IsReadOnly="True" TextWrapping="Wrap" MinHeight="48"/>
+            </Grid>
+        </Border>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Cancel" Width="90" MinHeight="34" Margin="0,0,8,0" Click="Cancel_Click"/>
+            <Button Content="Save" Width="90" MinHeight="34" Click="Save_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

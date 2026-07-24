@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.vscode/
+.idea/
+.dotnet/
+.nuget/
+.appdata/
+dist/
+tmp/
+**/app-icon-chroma.png
+dotnet-install.ps1
+*.user
+*.suo
+*.log
