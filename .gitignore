@@ -8,6 +8,16 @@ obj/
 .appdata/
 dist/
 tmp/
+
+# Personal metadata-provider credentials and machine-local settings.
+settings.json
+settings.local.json
+credentials.json
+.env
+.env.*
+!.env.example
+!.env.template
+
 **/app-icon-chroma.png
 dotnet-install.ps1
 *.user
