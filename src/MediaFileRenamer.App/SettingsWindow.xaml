@@ -39,6 +39,19 @@
             <TextBlock Text="Metadata sources, matching behavior, and staging preferences for this Windows user."
                        Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
                        TextWrapping="Wrap"/>
+            <Border x:Name="FirstRunBanner" Visibility="Collapsed"
+                    Background="{StaticResource AccentSoftBrush}"
+                    BorderBrush="{StaticResource AccentBrush}"
+                    BorderThickness="1" CornerRadius="7"
+                    Padding="14,11" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Text="Welcome — let’s make the first run safe"
+                               FontWeight="SemiBold" FontSize="15"
+                               Foreground="{StaticResource AccentHoverBrush}"/>
+                    <TextBlock Margin="0,5,0,0" TextWrapping="Wrap"
+                               Text="Add your personal provider credentials and test them, choose a staging folder, then select the default operation. Copy is recommended until you have verified the workflow with your own media. Nothing is changed until every item is reviewed and you confirm the batch."/>
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" x:Name="SettingsScrollViewer"
@@ -51,6 +64,7 @@
                 <GroupBox Header="Metadata providers" Margin="0,0,0,14">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -167,11 +181,22 @@
                         <Button Grid.Row="0" Grid.Column="2" Content="_Browse..." Click="BrowseOutput_Click"
                                 automation:AutomationProperties.Name="Browse for default output folder"/>
 
-                        <Label Grid.Row="1" Grid.Column="0" Content="Settings file"
+                        <Label Grid.Row="1" Grid.Column="0" Content="Default _operation"
+                               Target="{Binding ElementName=DefaultOperationComboBox}"
+                               Style="{StaticResource SettingsLabelStyle}"
+                               VerticalContentAlignment="Center" Margin="0,14,0,0"/>
+                        <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                  x:Name="DefaultOperationComboBox" Margin="0,14,0,0"
+                                  automation:AutomationProperties.Name="Default file operation">
+                            <ComboBoxItem Content="Move to staged folder"/>
+                            <ComboBoxItem Content="Copy to staged folder"/>
+                        </ComboBox>
+
+                        <Label Grid.Row="2" Grid.Column="0" Content="Settings file"
                                Target="{Binding ElementName=SettingsPathTextBox}"
                                Style="{StaticResource SettingsLabelStyle}"
                                VerticalContentAlignment="Top" Margin="0,14,0,0"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                        <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
                                  x:Name="SettingsPathTextBox" Margin="0,14,0,0"
                                  IsReadOnly="True" TextWrapping="Wrap" MinHeight="48"
                                  automation:AutomationProperties.Name="Settings file path"/>
@@ -186,7 +211,7 @@
                     IsCancel="True" Style="{StaticResource QuietButtonStyle}"
                     Click="Cancel_Click"
                     automation:AutomationProperties.Name="Cancel settings"/>
-            <Button Content="_Save Settings" Width="126"
+            <Button x:Name="SaveSettingsButton" Content="_Save Settings" Width="126"
                     IsDefault="True" Style="{StaticResource PrimaryButtonStyle}"
                     Click="Save_Click"
                     automation:AutomationProperties.Name="Save settings"/>

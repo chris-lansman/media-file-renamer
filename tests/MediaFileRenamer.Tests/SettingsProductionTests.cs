@@ -44,4 +44,17 @@ public sealed class SettingsProductionTests
         Assert.AreEqual("personal-key", service.Load().TmdbApiKey);
         Assert.IsFalse(File.Exists(path + ".tmp"));
     }
+
+    [TestMethod]
+    public void Save_RoundTripsDefaultOperationAsReadableJson()
+    {
+        using var directory = new DesktopTestDirectory();
+        var path = Path.Combine(directory.Path, "settings.json");
+        var service = new AppSettingsService(path);
+
+        service.Save(new AppSettings { DefaultOperation = FileOperation.Copy });
+
+        Assert.AreEqual(FileOperation.Copy, service.Load().DefaultOperation);
+        StringAssert.Contains(File.ReadAllText(path), "\"DefaultOperation\": \"Copy\"");
+    }
 }
