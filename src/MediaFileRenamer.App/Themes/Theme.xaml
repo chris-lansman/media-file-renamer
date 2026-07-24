@@ -17,6 +17,20 @@
     <SolidColorBrush x:Key="BlockedBrush" Color="#A62D26"/>
     <SolidColorBrush x:Key="BlockedSoftBrush" Color="#FDE8E7"/>
 
+    <Style x:Key="KeyboardFocusVisualStyle">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="2"
+                            BorderBrush="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"
+                            BorderThickness="2"
+                            CornerRadius="4"
+                            SnapsToDevicePixels="True"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <ControlTemplate x:Key="StandardButtonTemplate" TargetType="Button">
         <Border x:Name="Border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                 BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" SnapsToDevicePixels="True">
@@ -31,11 +45,25 @@
             <Trigger Property="IsPressed" Value="True">
                 <Setter TargetName="Border" Property="Background" Value="#E4EBF2"/>
             </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Border" Property="BorderBrush"
+                        Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                <Setter TargetName="Border" Property="BorderThickness" Value="2"/>
+            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="Border" Property="Background" Value="#F4F6F8"/>
                 <Setter TargetName="Border" Property="BorderBrush" Value="#E2E8F0"/>
                 <Setter Property="Foreground" Value="#9AA8B7"/>
             </Trigger>
+            <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
+                         Value="True">
+                <Setter TargetName="Border" Property="Background"
+                        Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+                <Setter TargetName="Border" Property="BorderBrush"
+                        Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+                <Setter Property="Foreground"
+                        Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+            </DataTrigger>
         </ControlTemplate.Triggers>
     </ControlTemplate>
 
@@ -53,11 +81,25 @@
             <Trigger Property="IsPressed" Value="True">
                 <Setter TargetName="Border" Property="Background" Value="{StaticResource AccentPressedBrush}"/>
             </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Border" Property="BorderBrush"
+                        Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                <Setter TargetName="Border" Property="BorderThickness" Value="2"/>
+            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="Border" Property="Background" Value="#B8D8E7"/>
                 <Setter TargetName="Border" Property="BorderBrush" Value="#B8D8E7"/>
                 <Setter Property="Foreground" Value="#F7FCFF"/>
             </Trigger>
+            <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
+                         Value="True">
+                <Setter TargetName="Border" Property="Background"
+                        Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                <Setter TargetName="Border" Property="BorderBrush"
+                        Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}"/>
+                <Setter Property="Foreground"
+                        Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}"/>
+            </DataTrigger>
         </ControlTemplate.Triggers>
     </ControlTemplate>
 
@@ -65,6 +107,15 @@
         <Setter Property="Background" Value="{StaticResource AppBackgroundBrush}"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
+                         Value="True">
+                <Setter Property="Background"
+                        Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+                <Setter Property="Foreground"
+                        Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+            </DataTrigger>
+        </Style.Triggers>
     </Style>
 
     <Style TargetType="Button">
@@ -74,6 +125,7 @@
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisualStyle}"/>
         <Setter Property="MinHeight" Value="34"/>
         <Setter Property="Padding" Value="12,7"/>
         <Setter Property="Template" Value="{StaticResource StandardButtonTemplate}"/>
@@ -120,6 +172,15 @@
                             <Setter TargetName="Border" Property="Background" Value="#F4F6F8"/>
                             <Setter Property="Foreground" Value="#9AA8B7"/>
                         </Trigger>
+                        <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
+                                     Value="True">
+                            <Setter TargetName="Border" Property="Background"
+                                    Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+                            <Setter TargetName="Border" Property="BorderBrush"
+                                    Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                            <Setter Property="Foreground"
+                                    Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                        </DataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -133,6 +194,17 @@
         <Setter Property="MinHeight" Value="32"/>
         <Setter Property="Padding" Value="7,4"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
+                         Value="True">
+                <Setter Property="Background"
+                        Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+                <Setter Property="BorderBrush"
+                        Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                <Setter Property="Foreground"
+                        Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+            </DataTrigger>
+        </Style.Triggers>
     </Style>
 
     <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
@@ -197,6 +269,25 @@
                             <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
                             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
                         </Trigger>
+                        <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
+                                     Value="True">
+                            <Setter Property="Background"
+                                    Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+                            <Setter Property="Foreground"
+                                    Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                        </DataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
+                                           Value="True"/>
+                                <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsSelected}"
+                                           Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Background"
+                                    Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                            <Setter Property="Foreground"
+                                    Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}"/>
+                        </MultiDataTrigger>
                     </Style.Triggers>
                 </Style>
             </Setter.Value>
