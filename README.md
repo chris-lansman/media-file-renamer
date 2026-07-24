@@ -10,19 +10,29 @@ A Windows desktop app for staging Plex-friendly movie and TV filenames before mo
 4. Use the Plex preset, flat review preset, or a custom token format.
 5. Click `Match All`, review every destination beside its original file, then click `Apply Rename`.
 
-Uncertain files are searched as both movies and TV shows. Clear matches are selected automatically; close or ambiguous results open the poster picker for confirmation. You can also use `Choose Match...` to force the picker or manually classify an unmatched file as a movie or TV episode.
+Uncertain files are searched as both movies and TV shows. TMDB and TVDB candidates are merged when the first result is missing or ambiguous, and TVDB-only series are retained instead of being discarded. Clear matches are selected automatically; close results open the poster picker with provider IDs, confidence, and the evidence behind the score. You can also use `Choose...` to force the picker or manually classify an unmatched file as a movie or TV episode. Local Movie/TV classification remains available when no TMDB key is configured.
 
-Unmatched files preview under `Review Needed` and cannot be moved or copied until they are classified. TV episodes must resolve to a season and episode number before the app will apply them.
+Season-zero specials are resolved through TMDB like regular episodes. When TMDB does not have the episode, an enabled TVDB fallback queries the selected episode order for the exact season/episode, absolute number, or air date. Folders named `Specials`, `Special`, `Season 00`, or `S00` are treated as season containers, so the parent series folder supplies the show identity instead of the generic folder/file label. Multi-episode ranges, date-based episodes, absolute-numbered episodes in explicit TV folders, split parts, and common movie editions are recognized.
+
+A TV row is only marked `Matched` when its series, season/episode number, and episode title are resolved. The match badge identifies the episode provider as `Matched · TMDB` or `Matched · TVDB`. A series-only result remains `Review needed` instead of presenting a generic filename as a completed match. If a filename already contains an episode title that conflicts with TVDB, the app leaves the row for review instead of silently replacing it.
+
+The review counter beside `Apply Rename` shows how many rows still need attention. Filters isolate matched, unresolved, or failed rows. The button remains disabled while any row is marked `Review needed`, `Ready to match`, or `Blocked`. The file-operation layer enforces the same all-or-nothing review gate, so a mixed batch cannot partially move safe-looking rows while an unresolved row remains. TV episodes must resolve to a season and episode number before the app will apply them.
+
+Apply performs a batch preflight and shows the exact operation, file count, companion-file count, size, and destination before changing anything. Subtitles, NFO files, artwork, and other same-stem companions follow the media file. Copy and cross-volume move operations use a temporary file, verify the completed length, and atomically finalize it. A failure or cancellation rolls back completed transfers. Recent operation journals are available from `File > Operation History`, and the most recent completed operation can be undone.
 
 ## Settings
 
-Use `File > Settings` to save your TMDB API key, TVDB API key, fallback preference, and default output folder. Settings are stored locally at:
+Use `File > Settings` to save your TMDB API key, TVDB API key, optional TVDB subscriber PIN, fallback preference, and default output folder. Settings are stored locally at:
 
 ```text
 %LOCALAPPDATA%\MediaFileRenamer\settings.json
 ```
 
 The default auto-match confidence is `92%`. Matches at or above that score are chosen automatically unless the next best result is nearly tied; uncertain matches still open the poster picker.
+
+Metadata access uses bring-your-own credentials. The application does not include, share, or proxy a TMDB or TVDB credential: each user supplies credentials issued for their own use. They remain visible in Settings and are stored in the local settings file so their owner can inspect and update them easily.
+
+Use the provider **Test** buttons in Settings to validate credentials without saving first. Settings are scrollable and resizable. Diagnostic logs are stored under `%LOCALAPPDATA%\MediaFileRenamer\Logs`; provider credentials and local paths are redacted from those logs.
 
 ## Format tokens
 
@@ -33,8 +43,16 @@ Custom formats are relative to the output folder. The app adds the original file
 {Year}
 {Season}
 {Episode}
+{EpisodeEnd}
+{AirDate}
+{AbsoluteEpisode}
+{Part}
 {EpisodeTitle}
 {TmdbId}
+{TvdbId}
+{ProviderId}
+{Edition}
+{EditionTag}
 ```
 
 Examples:
@@ -71,14 +89,46 @@ MediaFileRenamer-win-x64.zip.sha256
 
 The ZIP is a self-contained Windows x64 build and does not require a separate .NET installation. The checksum can be used to verify that the downloaded ZIP is unchanged.
 
+## Install and verify
+
+Download both release files into the same folder, then verify the ZIP before extracting it:
+
+```powershell
+$expected = (Get-Content .\MediaFileRenamer-win-x64.zip.sha256).Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
+$actual = (Get-FileHash .\MediaFileRenamer-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "Checksum mismatch" }
+```
+
+Extract the ZIP to a user-owned folder and run `MediaFileRenamer.exe`. Published builds are self-contained and portable; uninstalling consists of closing the app and deleting that extracted folder. User settings and operation data under `%LOCALAPPDATA%\MediaFileRenamer` are intentionally separate.
+
+A build is Authenticode-signed only when the repository's optional signing secrets are configured. On an unsigned build, Windows may show a SmartScreen warning. Check the executable's **Properties > Digital Signatures** tab before relying on a claimed publisher identity.
+
+Public-repository builds also receive GitHub artifact provenance. Verify an attested ZIP with:
+
+```powershell
+gh attestation verify .\MediaFileRenamer-win-x64.zip --repo chris-lansman/media-file-renamer
+```
+
+## Versions and releases
+
+Release tags use semantic versions such as `v0.1.0`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; regular `main` builds receive a `0.1.0-ci.<run>` version. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
+
+The release workflow verifies formatting, treats compiler warnings as errors, runs the full test suite, audits vulnerable and deprecated NuGet dependencies, publishes a self-contained Windows x64 package, starts that exact published executable as a smoke test, and verifies its SHA-256 checksum.
+
+Maintainer setup for optional signing and the remaining MSIX requirements is documented in [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Development
 
 The solution targets .NET 10 on Windows. Build and run the complete test suite with:
 
 ```powershell
-dotnet test MediaFileRenamer.sln --configuration Release
+dotnet restore MediaFileRenamer.sln
+dotnet format MediaFileRenamer.sln --verify-no-changes --no-restore --severity warn
+dotnet build MediaFileRenamer.sln --configuration Release --no-restore -p:TreatWarningsAsErrors=true
+dotnet test MediaFileRenamer.sln --configuration Release --no-build --no-restore
+.github\scripts\Test-NuGetAudit.ps1 -SolutionPath MediaFileRenamer.sln
 ```
 
-The tests cover filename parsing, movie and TV planning, custom-path containment, Windows reserved names, TMDB error handling and confidence behavior, duplicate destinations, move/copy behavior, source-folder cleanup, unresolved-media blocking, and WPF window startup.
+The tests cover advanced filename parsing, movie/TV and custom naming, Windows path safety, unified TMDB/TVDB matching, provider-order episode lookup, retries and cancellation, metadata-provider labeling, companion files, collision and write preflight, transactional move/copy rollback, operation journals and undo, settings recovery, diagnostic redaction, provider checks, the all-or-nothing review gate, offline manual classification, and WPF window startup/state.
 
 The app never overwrites an existing destination or silently changes the reviewed destination name. Successful items are removed from the review list; failed items remain with an actionable status.

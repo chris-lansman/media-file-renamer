@@ -9,10 +9,20 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>MediaFileRenamer</AssemblyName>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
+    <Product>Media File Renamer</Product>
+    <Description>Safely matches and stages movie and television files with Plex-friendly names.</Description>
+    <Authors>Media File Renamer contributors</Authors>
+    <RepositoryUrl>https://github.com/chris-lansman/media-file-renamer</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <Deterministic>true</Deterministic>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="Assets\app-icon.ico" />
+    <Resource Include="Assets\app-icon.png" />
   </ItemGroup>
 
 </Project>

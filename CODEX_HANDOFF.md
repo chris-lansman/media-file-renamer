@@ -16,7 +16,7 @@ The app should move or copy files there first. It must not automatically place m
 
 - Repository: `https://github.com/chris-lansman/media-file-renamer` (private)
 - Primary branch: `main`
-- Expected local repository: `C:\Users\cclan\Documents\MediaFileRenamer`
+- Current local repository: `C:\Users\clansman\repos\media-file-renamer`
 - Windows application project: `src\MediaFileRenamer.App\MediaFileRenamer.App.csproj`
 - Test project: `tests\MediaFileRenamer.Tests\MediaFileRenamer.Tests.csproj`
 - Last feature commit before this handoff document: `18a6603 Clarify match status in the review workspace`
@@ -47,7 +47,7 @@ dist\MediaFileRenamer\MediaFileRenamer.exe
 - The user primarily uses Plex. The main preset should remain Plex-friendly and include TMDB IDs where available.
 - The user wants a side-by-side source and proposed-name review, similar in spirit to FileBot but easier to read.
 - File extensions and technical detail should not dominate the review UI. The important signal is whether a row is safely matched or needs attention.
-- TMDB and TVDB keys live in local settings and are displayed as normal text fields, not masked. Do not commit keys to Git.
+- TMDB and TVDB keys and the optional TVDB subscriber PIN live in local settings and are displayed as normal text fields, not masked. Do not commit them to Git.
 - Metadata rewriting is deliberately off by default. Renaming/staging is the primary feature. Future embedded-metadata cleanup must be an advanced opt-in because it can require rewriting large media files.
 - Folder cleanup after a successful move is enabled only for empty source folders, with protections for user profile, Downloads, and Windows special folders.
 
@@ -65,10 +65,18 @@ Successful rows are removed from the list after the move/copy. Rows that fail re
 ## Matching and Metadata
 
 - TMDB is the primary lookup source.
-- TVDB is a saved fallback for TV series searches; returned TVDB IDs are resolved through TMDB for the final match data.
+- TMDB remains primary, but ambiguous or missing series searches are merged with TVDB. Genuine TVDB-only candidates are supported and retain a TVDB identity when TMDB has no mapping.
+- Episode resolution supports TVDB default, official, DVD, absolute, alternate, and regional orders. Absolute-number and air-date lookups are supported.
+- If the filename contains an episode title, TVDB fallback requires that title to agree after punctuation/case normalization. A conflict stays `Review needed`.
+- Matched TV rows display the episode provider as `Matched · TMDB` or `Matched · TVDB`.
 - Default auto-match confidence: `92%`.
 - High-confidence, non-near-tied candidates auto-select. Ambiguous candidates open the poster picker.
 - Matching looks at both movie and TV possibilities and includes parent-folder evidence for TV items.
+- Candidate rows show TMDB/TVDB provenance, provider IDs, confidence, and scoring evidence.
+- Transient metadata `429` and `5xx` responses use bounded retry/backoff, and lookups accept cancellation.
+- `Specials`, `Special`, `Season 00`, and `S00` folders are treated as season containers; their parent folder provides the series identity.
+- TMDB season `0` is queried directly for specials, and text after an `SxxEyy` code is retained as episode-title evidence.
+- A TV row is marked `Matched` only after the episode number and title are resolved; a series-only match remains `Review needed`.
 - A selected TV identity is applied to related items in the same source group.
 - `Choose...` always opens the match picker. It also supports a local Movie/TV choice when no remote match exists.
 - Settings file:
@@ -83,9 +91,12 @@ Important implementation files:
 - `src\MediaFileRenamer.App\MainWindow.xaml.cs` - scan, match, selection, destination refresh, and apply handling.
 - `src\MediaFileRenamer.App\MatchPickerWindow.xaml` and `.xaml.cs` - poster/result picker.
 - `src\MediaFileRenamer.App\Services\TmdbClient.cs` - TMDB search, confidence scoring, and detail lookup.
-- `src\MediaFileRenamer.App\Services\TvdbClient.cs` - TVDB fallback lookup.
+- `src\MediaFileRenamer.App\Services\TvdbClient.cs` - TVDB login, series search, and exact episode fallback.
+- `src\MediaFileRenamer.App\Services\TvEpisodeMetadataResolver.cs` - TMDB-first episode resolution and guarded TVDB fallback.
 - `src\MediaFileRenamer.App\Services\RenamePlanner.cs` - Plex/custom destination generation and path safety.
 - `src\MediaFileRenamer.App\Services\RenameApplier.cs` - move/copy, collision checks, and empty-folder cleanup.
+- `src\MediaFileRenamer.App\Services\OperationJournalService.cs` - durable operation history and undo.
+- `src\MediaFileRenamer.App\Services\MetadataMatchService.cs` - unified TMDB/TVDB candidate aggregation.
 - `src\MediaFileRenamer.App\ViewModels\MediaPreviewItem.cs` - preview row state, including `MatchState`.
 
 ## Naming
@@ -99,8 +110,16 @@ Supported tokens:
 {Year}
 {Season}
 {Episode}
+{EpisodeEnd}
+{AirDate}
+{AbsoluteEpisode}
+{Part}
 {EpisodeTitle}
 {TmdbId}
+{TvdbId}
+{ProviderId}
+{Edition}
+{EditionTag}
 ```
 
 Examples:
@@ -120,69 +139,60 @@ The latest UI pass decluttered the review grids and added a semantic `MatchState
 - `Blocked`
 - `Complete`
 
-This is a meaningful improvement, but it is not yet sufficient protection against an unattended batch apply.
+The UI and file-operation boundary both enforce the hard review gate.
 
-## Highest-Priority Follow-Up: Hard Review Gate
+## Completed Follow-Up: Hard Review Gate
 
-This is the active product issue from the most recent session.
+The hard review gate is implemented across the row model, main window, and file-operation boundary.
 
 ### Why it matters
 
 FileBot's Rename workspace makes a visual distinction between original files and proposed mappings, but it does not provide an obvious persistent review-count warning. The user correctly pointed out that a person should not have to scan every row to discover an uncertain match.
 
-The current application has a real safety gap:
+Current behavior:
 
-- `MainWindow.ApplyRename_Click` immediately calls `_applier.Apply(PreviewItems, operation)`.
-- `RenameApplier.Apply` blocks unknown media types, unresolved TV episode numbers, missing sources, collisions, and invalid destinations.
-- It **does not** block an item simply because `MatchState` is `Review needed`.
-
-Therefore a mixed batch can partially move the items that pass basic validation while an uncertain row is left behind or moved from a local guess. The README currently says unresolved files cannot be moved; that statement should be corrected only after the code enforces it.
-
-### Recommended implementation
-
-Make applying a batch impossible while any row is unresolved:
-
-1. Add a reusable predicate such as `RequiresReview` for rows with `Review needed`, `Ready to match`, or `Blocked` state. A deliberate `Manual choice` is valid.
-2. Surface a count, for example `3 need review`, adjacent to the main Apply Rename control and/or the Proposed Names heading.
-3. Disable **Apply Rename** while the count is non-zero.
-4. If an apply is attempted through another path, show a review dialog or select the first unresolved item and direct the user to **Choose...**. Do not start a partial move.
-5. Add focused tests proving that a batch with one unresolved item does not move any item, and that a fully matched/manual-choice batch still moves normally.
-6. Update README wording after tests pass.
-
-The desired behavior is deliberately conservative: all items must be explicitly safe before any files in that batch are moved or copied.
+- `MediaPreviewItem.RequiresReview` covers `Review needed`, `Ready to match`, and `Blocked`. A deliberate `Manual choice` is valid, except that TV choices still need season and episode numbers.
+- A live review count appears beneath **Apply Rename**.
+- **Apply Rename** remains disabled until every item is resolved and has a destination.
+- The apply handler selects the first unresolved item and explains the block if invoked through another path.
+- `RenameApplier.Apply` independently rejects the entire batch when any row requires review.
+- Local Movie/TV classification remains available through **Choose...** without a TMDB key.
+- Focused model, WPF state, and apply-boundary tests protect these behaviors.
 
 ## Existing Test Coverage
 
-The test suite currently covers:
+The test suite covers:
 
 - filename parsing;
 - movie and TV planning;
 - custom-path containment and Windows reserved names;
 - TMDB error handling and confidence behavior;
 - duplicate destinations;
-- move/copy behavior;
+- companion-file association and naming;
+- transactional move/copy behavior, rollback, journals, and undo;
 - source-folder cleanup;
 - unresolved media blocking;
-- WPF window startup.
+- settings normalization and atomic save;
+- diagnostic redaction, provider connection tests, and WPF window startup.
 
-When implementing the review gate, add tests at both the view-model/planning layer and the apply boundary. The current `RenameApplier` tests should be expanded to ensure no row is moved if the batch contains an unresolved match.
+The review-gate tests cover the view model, WPF Apply state/count, offline local picker, whole-batch blocking, and mixed matched/manual batches. Matching tests cover PIN authentication, multiple episode orders, absolute and date-based lookup, exact-coordinate enforcement, caching, TVDB-only candidates, cross-provider aggregation, provider labeling, aliases, retries, and conflicting-title rejection.
 
 ## Packaging and Releases
 
 GitHub Actions workflow: `.github\workflows\build.yml`
 
-- Pushes and pull requests to `main` run restore, build, and tests on `windows-latest`.
+- Pushes and pull requests to `main` run restore, formatting verification, warnings-as-errors build, tests, and NuGet auditing on `windows-latest`.
 - Successful pushes to `main` package a self-contained `win-x64` ZIP and SHA-256 file as a 30-day artifact.
 - A version tag such as `v0.1.0` creates a permanent GitHub Release with the ZIP and checksum.
+- Optional Authenticode signing is gated on both signing secrets being configured; unsigned builds remain supported.
 - There are intentionally no self-hosted or GitLab runners.
 
 ## Practical Continuation Checklist
 
-1. Implement the hard review gate above.
-2. Run the full tests.
-3. Build the self-contained executable into `dist\MediaFileRenamer`.
-4. Manually test a batch containing one obvious match and one intentionally ambiguous/unmatched file. Confirm no move occurs until both are resolved.
-5. Commit with a focused message and push `main`; GitHub Actions will publish the development artifact.
+1. Run the strict validation commands from `README.md`.
+2. Build the self-contained executable into a clean `dist` folder.
+3. Manually test provider credentials, one obvious match, one ambiguous match, a subtitle companion, cancellation/rollback, and undo.
+4. Commit with a focused message and push `main`; GitHub Actions will publish the development artifact.
 
 ## Safety Notes
 

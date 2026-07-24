@@ -11,37 +11,88 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 permissions:
   contents: read
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
 jobs:
   test:
+    name: Validate
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           global-json-file: global.json
 
       - name: Restore dependencies
         run: dotnet restore MediaFileRenamer.sln
 
-      - name: Build and run tests
-        run: dotnet test MediaFileRenamer.sln --configuration Release --no-restore
+      - name: Verify formatting
+        run: dotnet format MediaFileRenamer.sln --verify-no-changes --no-restore --severity warn
+
+      - name: Build with warnings treated as errors
+        run: >-
+          dotnet build MediaFileRenamer.sln
+          --configuration Release
+          --no-restore
+          -p:TreatWarningsAsErrors=true
+          -p:ContinuousIntegrationBuild=true
+
+      - name: Run tests
+        run: >-
+          dotnet test MediaFileRenamer.sln
+          --configuration Release
+          --no-build
+          --no-restore
+          --logger "trx;LogFileName=MediaFileRenamer.trx"
+          --results-directory TestResults
+
+      - name: Audit NuGet dependencies
+        shell: pwsh
+        run: ./.github/scripts/Test-NuGetAudit.ps1 -SolutionPath MediaFileRenamer.sln
+
+      - name: Upload test results
+        if: ${{ always() && hashFiles('TestResults/*.trx') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results-${{ github.run_id }}
+          path: TestResults/*.trx
+          if-no-files-found: error
+          retention-days: 14
 
   package:
+    name: Package Windows x64
     if: github.event_name != 'pull_request'
     needs: test
     runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           global-json-file: global.json
 
@@ -52,7 +103,10 @@ jobs:
           if ($env:GITHUB_REF_TYPE -eq "tag") {
             $version = $env:GITHUB_REF_NAME.TrimStart("v")
           } else {
-            $version = "0.0.0-ci.$env:GITHUB_RUN_NUMBER"
+            $version = "0.1.0-ci.$env:GITHUB_RUN_NUMBER"
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+            throw "The resolved version '$version' is not a valid SemVer version."
           }
           "version=$version" >> $env:GITHUB_OUTPUT
 
@@ -68,16 +122,59 @@ jobs:
           --no-restore
           --output publish
           -p:Version=${{ steps.version.outputs.version }}
+          -p:ContinuousIntegrationBuild=true
 
-      - name: Create ZIP and checksum
+      - name: Check optional signing configuration
+        id: signing
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)
+          if ($hasCertificate -xor $hasPassword) {
+            throw "Configure both Windows signing secrets or neither."
+          }
+          "enabled=$($hasCertificate.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Sign application
+        if: steps.signing.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+        run: ./.github/scripts/Sign-PublishedApp.ps1 -PublishDirectory publish
+
+      - name: Smoke-test published application
+        shell: pwsh
+        run: ./.github/scripts/Test-PublishedApp.ps1 -ExecutablePath publish/MediaFileRenamer.exe
+
+      - name: Create ZIP and SHA-256 checksum
         shell: pwsh
         run: |
           Compress-Archive -Path publish/* -DestinationPath MediaFileRenamer-win-x64.zip -CompressionLevel Optimal
           $hash = (Get-FileHash MediaFileRenamer-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  MediaFileRenamer-win-x64.zip" | Set-Content MediaFileRenamer-win-x64.zip.sha256 -NoNewline
 
+      - name: Verify checksum
+        shell: pwsh
+        run: |
+          $expected = (Get-Content MediaFileRenamer-win-x64.zip.sha256).Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)[0]
+          $actual = (Get-FileHash MediaFileRenamer-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Packaged artifact checksum verification failed."
+          }
+
+      - name: Attest release provenance
+        if: ${{ github.event.repository.visibility == 'public' || vars.ENABLE_PRIVATE_ATTESTATION == 'true' }}
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-checksums: MediaFileRenamer-win-x64.zip.sha256
+
       - name: Upload downloadable build
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: MediaFileRenamer-${{ github.ref_name }}-win-x64
           path: |
@@ -88,14 +185,16 @@ jobs:
           compression-level: 0
 
   release:
+    name: Publish GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: package
     runs-on: windows-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
       - name: Download packaged application
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: MediaFileRenamer-${{ github.ref_name }}-win-x64
           path: release
