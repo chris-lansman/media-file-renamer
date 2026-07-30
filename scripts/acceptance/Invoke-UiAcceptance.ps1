@@ -1016,7 +1016,7 @@ function Open-SyntheticFixture {
         -Absent | Out-Null
 }
 
-function Open-MatchPickerForFirstRow {
+function Open-ManualChoiceForFirstRow {
     param(
         [Parameter(Mandatory)]
         [System.Windows.Automation.AutomationElement] $MainWindow
@@ -1047,7 +1047,7 @@ function Open-MatchPickerForFirstRow {
     Invoke-UiaElement $choose
     return Wait-UiaWindow `
         -ProcessId $script:TargetProcess.Id `
-        -Name "Choose Match"
+        -Name "Classify Media"
 }
 
 function Close-WithEscape {
@@ -1309,17 +1309,17 @@ try {
     Open-SyntheticFixture `
         -MainWindow $main `
         -FixturePath $fixturePath
-    $picker = Open-MatchPickerForFirstRow -MainWindow $main
-    Audit-Capture-Traverse -Window $picker -Slug "match-picker"
+    $picker = Open-ManualChoiceForFirstRow -MainWindow $main
+    Audit-Capture-Traverse -Window $picker -Slug "local-classification"
     Close-WithEscape `
         -Window $picker `
-        -Name "Choose Match" `
-        -Slug "match-picker" `
+        -Name "Classify Media" `
+        -Slug "local-classification" `
         -FallbackCloseName "Cancel match selection"
     Add-Check `
-        -Id "match-picker.synthetic-file" `
+        -Id "local-classification.synthetic-file" `
         -Passed $true `
-        -Message "A synthetic media file reached the packaged manual Match Picker without provider credentials." `
+        -Message "A synthetic media file reached the packaged local classification choice without provider credentials." `
         -Evidence $fixturePath
     Invoke-UiaElement (
         Find-UiaElement -Root $main -AutomationId "ClearButton")
