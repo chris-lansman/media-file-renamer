@@ -135,6 +135,21 @@ public sealed class SecondaryUxPolishTests
             OperationHistoryWindow.GetOpenableDestinationDirectory(details));
     }
 
+    [STATestMethod]
+    public void AboutWindow_OffersReleasePageBeforeNetworkCheck()
+    {
+        WpfTestApplication.EnsureResources();
+        var window = new AboutWindow();
+
+        Assert.IsTrue(
+            ((Button)window.FindName("OpenReleaseButton")).IsEnabled);
+        Assert.AreEqual(
+            AutomationLiveSetting.Polite,
+            AutomationProperties.GetLiveSetting(
+                (TextBlock)window.FindName("UpdateStatusTextBlock")));
+        window.Close();
+    }
+
     [TestMethod]
     public async Task UpdateChecker_ReportsNewerGitHubRelease()
     {

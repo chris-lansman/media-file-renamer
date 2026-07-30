@@ -10,10 +10,12 @@ namespace MediaFileRenamer.App;
 
 public partial class AboutWindow : Window
 {
+    private static readonly Uri ReleasesPageUri = new(
+        "https://github.com/chris-lansman/media-file-renamer/releases/latest");
     private readonly IUpdateChecker _updateChecker;
     private readonly Version _currentVersion;
     private CancellationTokenSource? _updateCancellation;
-    private Uri? _latestReleaseUri;
+    private Uri _latestReleaseUri = ReleasesPageUri;
 
     public AboutWindow()
         : this(new GitHubReleaseUpdateChecker(), GetApplicationVersion())
@@ -76,7 +78,6 @@ public partial class AboutWindow : Window
         _updateCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         CheckForUpdatesButton.IsEnabled = false;
-        OpenReleaseButton.IsEnabled = false;
         UpdateStatusTextBlock.Foreground =
             (System.Windows.Media.Brush)FindResource("MutedTextBrush");
         UpdateStatusTextBlock.Text = "Checking GitHub Releases...";
@@ -87,7 +88,6 @@ public partial class AboutWindow : Window
                 _currentVersion,
                 _updateCancellation.Token);
             _latestReleaseUri = result.ReleaseUri;
-            OpenReleaseButton.IsEnabled = _latestReleaseUri is not null;
             UpdateStatusTextBlock.Foreground =
                 (System.Windows.Media.Brush)FindResource(
                     result.UpdateAvailable ? "ReviewBrush" : "MatchBrush");
@@ -96,7 +96,7 @@ public partial class AboutWindow : Window
         catch (OperationCanceledException)
         {
             UpdateStatusTextBlock.Text =
-                "The update check timed out. Check your connection and try again.";
+                "The update check timed out. Check your connection and try again, or open the release page.";
         }
         catch (Exception ex) when (
             ex is HttpRequestException
@@ -105,7 +105,7 @@ public partial class AboutWindow : Window
         {
             DiagnosticLog.Current.Error("Could not check for updates.", ex);
             UpdateStatusTextBlock.Text =
-                "Updates could not be checked right now. You can keep using this version and try again later.";
+                "Updates could not be checked right now. You can keep using this version, try again later, or open the release page.";
         }
         finally
         {
@@ -115,11 +115,6 @@ public partial class AboutWindow : Window
 
     private void OpenRelease_Click(object sender, RoutedEventArgs e)
     {
-        if (_latestReleaseUri is null)
-        {
-            return;
-        }
-
         OpenUri(_latestReleaseUri, "Windows could not open the release page.");
     }
 
