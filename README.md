@@ -16,7 +16,9 @@ Season-zero specials are resolved through TMDB like regular episodes. When TMDB 
 
 A TV row is only marked `Matched` when its series, season/episode number, and episode title are resolved. The match badge identifies the episode provider as `Matched · TMDB` or `Matched · TVDB`. A series-only result remains `Review needed` instead of presenting a generic filename as a completed match. If a filename already contains an episode title that conflicts with TVDB, the app leaves the row for review instead of silently replacing it.
 
-The review counter beside `Apply Rename` shows how many rows still need attention. Filters isolate matched, unresolved, or failed rows. The button remains disabled while any row is marked `Review needed`, `Ready to match`, or `Blocked`. The file-operation layer enforces the same all-or-nothing review gate, so a mixed batch cannot partially move safe-looking rows while an unresolved row remains. TV episodes must resolve to a season and episode number before the app will apply them.
+The unified review table keeps each original file beside its proposed destination, match state/provider, and row actions. Filters isolate matched, unresolved, or failed rows; **Retry Unresolved** reruns only rows that still need attention. The final action identifies the exact operation and count, such as `Copy 8 files`, and remains disabled while any row is marked `Review needed`, `Ready to match`, or `Blocked`. The file-operation layer enforces the same all-or-nothing review gate, so a mixed batch cannot partially move safe-looking rows while an unresolved row remains. TV episodes must resolve to a season and episode number before the app will apply them.
+
+After confirming a TV match, **Always use this show for this folder** remembers the provider identity and episode order. Future batches from that show folder skip the series search and resolve episodes directly. Remembered mappings can be reviewed or removed in Settings.
 
 Apply performs a batch preflight and shows the exact operation, file count, companion-file count, size, and destination before changing anything. Subtitles, NFO files, artwork, and other same-stem companions follow the media file. Copy and cross-volume move operations use a temporary file, verify the completed length, and atomically finalize it. A failure or cancellation rolls back completed transfers. Recent operation journals are available from `File > Operation History`, and the most recent completed operation can be undone.
 
@@ -33,6 +35,14 @@ The default auto-match confidence is `92%`. Matches at or above that score are c
 Metadata access uses bring-your-own credentials. The application does not include, share, or proxy a TMDB or TVDB credential: each user supplies credentials issued for their own use. They remain visible in Settings and are stored in the local settings file so their owner can inspect and update them easily.
 
 Use the provider **Test** buttons in Settings to validate credentials without saving first. Settings are scrollable and resizable. Diagnostic logs are stored under `%LOCALAPPDATA%\MediaFileRenamer\Logs`; provider credentials and local paths are redacted from those logs.
+
+Repeat provider responses are cached without credentials in a bounded, expiring local file:
+
+```text
+%LOCALAPPDATA%\MediaFileRenamer\metadata-cache.json
+```
+
+The app follows the Windows light/dark app preference automatically and retains its system-color High Contrast mode.
 
 ## Format tokens
 
@@ -80,7 +90,7 @@ The PowerShell script is only a developer helper for running from source.
 
 Every push to `main` that passes the test suite produces a downloadable Windows ZIP on that workflow run's GitHub Actions page. These development artifacts are retained for 30 days.
 
-Version tags such as `v1.0.0` produce a permanent GitHub Release containing:
+Version tags such as `v1.1.0` produce a permanent GitHub Release containing:
 
 ```text
 MediaFileRenamer-win-x64.zip
@@ -111,9 +121,11 @@ gh attestation verify .\MediaFileRenamer-win-x64.zip --repo chris-lansman/media-
 
 ## Versions and releases
 
-Release tags use semantic versions such as `v1.0.0`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; regular `main` builds receive a `1.0.0-ci.<run>` version. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
+Release tags use semantic versions such as `v1.1.0`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; regular `main` builds receive a `1.1.0-ci.<run>` version. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
 
 The release workflow verifies formatting, treats compiler warnings as errors, runs the full test suite, audits vulnerable and deprecated NuGet dependencies, publishes a self-contained Windows x64 package, starts that exact published executable as a smoke test, and verifies its SHA-256 checksum.
+
+A separate weekly maintenance workflow repeats the dependency audit, while Dependabot groups NuGet and GitHub Actions updates into bounded reviewable pull requests.
 
 Maintainer setup for optional signing and the remaining MSIX requirements is documented in [docs/RELEASING.md](docs/RELEASING.md).
 

@@ -6,7 +6,7 @@
 2. Confirm the `VersionPrefix` in `MediaFileRenamer.App.csproj` matches the intended release line.
 3. Run the validation commands from the README on Windows.
 4. Complete the [real-world acceptance matrix](ACCEPTANCE.md) against the packaged release candidate.
-5. Push a semantic-version tag such as `v1.0.0`.
+5. Push a semantic-version tag such as `v1.1.0`.
 6. Confirm that the `Validate`, `Package Windows x64`, and `Publish GitHub release` jobs all pass.
 7. Download the release ZIP and checksum, verify the checksum, and launch the packaged executable on a clean Windows user profile.
 
