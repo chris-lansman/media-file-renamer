@@ -51,6 +51,7 @@ public partial class MatchPickerWindow : Window
     private void ConfigureLocalClassificationMode()
     {
         Title = "Classify Media";
+        PickerHeadingTextBlock.Text = "Classify this media file";
         Width = 760;
         Height = 480;
         PickerContentBorder.MinWidth = 640;
