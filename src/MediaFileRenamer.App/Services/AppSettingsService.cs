@@ -249,6 +249,7 @@ public sealed class AppSettingsService
             return null;
         }
 
+        mapping = mapping.Copy();
         string identity;
         try
         {
