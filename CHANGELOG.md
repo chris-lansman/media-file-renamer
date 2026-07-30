@@ -5,6 +5,24 @@ Notable user-visible changes are recorded here. This project follows
 
 ## Unreleased
 
+## 1.1.0 - 2026-07-30
+
+### Added
+
+- Remembered source-folder show mappings with reusable TMDB/TVDB identities and episode-order preferences.
+- Bounded, expiring, corruption-tolerant metadata caching for repeat TMDB and TVDB lookups.
+- Automatic Windows light/dark palette support while retaining High Contrast behavior.
+- Selected operation details, safe per-operation Undo, Copy Details, and Open Destination actions.
+- Manual update checking from About with an always-available release download link.
+- Weekly dependency auditing, grouped Dependabot updates, and a broader real-world filename regression corpus.
+- PGS `.sup` subtitle companion handling and additional modern release-tag cleanup.
+
+### Changed
+
+- The main workspace now uses one unified original-to-proposed review table with row actions, a clearer empty state, accurate batch summaries, retry-unresolved support, and a dynamic Copy/Move action.
+- Settings validates confidence and output-folder values explicitly and can review or remove remembered show mappings.
+- Local classification uses a compact workflow when provider credentials are unavailable.
+
 ## 1.0.0 - 2026-07-24
 
 ### Added
