@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -21,7 +22,6 @@ public partial class MainWindow : Window
     private readonly MetadataMatchService _matchService = new();
     private readonly AppSettingsService _settingsService = new();
     private AppSettings _settings = new();
-    private bool _isSyncingSelection;
     private bool _isBusy;
     private bool _firstRunPromptShown;
     private readonly bool _showFirstRun;
@@ -116,28 +116,65 @@ public partial class MainWindow : Window
 
     private async Task MatchAllAsync()
     {
+        await MatchItemsAsync(PreviewItems.ToList(), retryExistingMatches: false);
+    }
+
+    private async void RetryUnresolved_Click(object sender, RoutedEventArgs e)
+    {
+        await RunBusyAsync(RetryUnresolvedAsync);
+    }
+
+    private async Task RetryUnresolvedAsync()
+    {
+        var unresolved = PreviewItems.Where(item => item.RequiresReview).ToList();
+        if (unresolved.Count == 0)
+        {
+            StatusTextBlock.Text = "There are no unresolved files to retry.";
+            return;
+        }
+
+        await MatchItemsAsync(unresolved, retryExistingMatches: true);
+    }
+
+    private async Task MatchItemsAsync(
+        IReadOnlyList<MediaPreviewItem> items,
+        bool retryExistingMatches)
+    {
         var key = _settings.TmdbApiKey.Trim();
         var useTmdb = _settings.UseTmdbLookup && !string.IsNullOrWhiteSpace(key);
         var client = useTmdb ? new TmdbClient(key) : null;
         var tvdbClient = CreateTvdbFallback();
 
-        StatusTextBlock.Text = useTmdb ? "Matching all files with TMDB..." : "Planning all filenames from local names...";
+        StatusTextBlock.Text = useTmdb
+            ? retryExistingMatches
+                ? $"Retrying {items.Count} unresolved file(s) with configured providers..."
+                : "Matching all files with configured providers..."
+            : "Planning filenames from local names; provider matching is not configured.";
 
-        foreach (var item in PreviewItems)
+        foreach (var item in items)
         {
-            if (client is not null && item.TmdbId is null && item.TvdbId is null)
+            if (client is not null
+                && (retryExistingMatches || (item.TmdbId is null && item.TvdbId is null)))
             {
-                var selected = await MatchItemAsync(client, tvdbClient, item, showPickerForUncertain: true);
+                var selected = await MatchItemAsync(
+                    client,
+                    tvdbClient,
+                    item,
+                    showPickerForUncertain: true);
                 if (selected is not null)
                 {
-                    await ApplyTvShowIdentityToRelatedItemsAsync(client, tvdbClient, item, selected);
+                    await ApplyTvShowIdentityToRelatedItemsAsync(
+                        client,
+                        tvdbClient,
+                        item,
+                        selected);
                 }
             }
 
             UpdateDestination(item);
         }
 
-        StatusTextBlock.Text = $"Ready: {PreviewItems.Count} item(s) matched/planned.";
+        StatusTextBlock.Text = FormatMatchSummary(PreviewItems);
     }
 
     private async void MatchSelected_Click(object sender, RoutedEventArgs e)
@@ -301,17 +338,8 @@ public partial class MainWindow : Window
 
     private void Clear_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            _isSyncingSelection = true;
-            OriginalGrid.SelectedItem = null;
-            NewNamesGrid.SelectedItem = null;
-            PreviewItems.Clear();
-        }
-        finally
-        {
-            _isSyncingSelection = false;
-        }
+        OriginalGrid.SelectedItem = null;
+        PreviewItems.Clear();
 
         StatusTextBlock.Text = "Cleared.";
         UpdateActionState();
@@ -376,6 +404,7 @@ public partial class MainWindow : Window
         MatchAllButton.IsEnabled = enabled;
         MatchSelectedButton.IsEnabled = enabled;
         ChooseSelectedButton.IsEnabled = enabled;
+        RetryUnresolvedButton.IsEnabled = enabled;
         RenameButton.IsEnabled = enabled;
     }
 
@@ -389,8 +418,11 @@ public partial class MainWindow : Window
             || MatchAllButton is null
             || MatchSelectedButton is null
             || ChooseSelectedButton is null
+            || RetryUnresolvedButton is null
             || RenameButton is null
-            || ReviewCountTextBlock is null)
+            || ReviewCountTextBlock is null
+            || EmptyDropPanel is null
+            || SelectedFileEditor is null)
         {
             return;
         }
@@ -404,12 +436,22 @@ public partial class MainWindow : Window
         MatchAllButton.IsEnabled = hasItems;
         MatchSelectedButton.IsEnabled = hasSelection;
         ChooseSelectedButton.IsEnabled = hasSelection;
+        RetryUnresolvedButton.IsEnabled = hasItems && reviewCount > 0;
         RenameButton.IsEnabled = hasItems
             && reviewCount == 0
             && PreviewItems.All(item => !string.IsNullOrWhiteSpace(item.DestinationPath));
         RenameButton.ToolTip = reviewCount > 0
             ? "Resolve every item marked Review needed, Ready to match, or Blocked first."
             : null;
+        EmptyDropPanel.Visibility = hasItems ? Visibility.Collapsed : Visibility.Visible;
+        SelectedFileEditor.Visibility = hasSelection ? Visibility.Visible : Visibility.Collapsed;
+
+        var operation = OperationComboBox?.SelectedIndex == 1 ? "Copy" : "Move";
+        var fileNoun = PreviewItems.Count == 1 ? "file" : "files";
+        RenameButton.Content = $"{operation} {PreviewItems.Count} {fileNoun}";
+        AutomationProperties.SetName(
+            RenameButton,
+            $"{operation} {PreviewItems.Count} reviewed {fileNoun}");
 
         ReviewCountTextBlock.Text = !hasItems
             ? "Add files to begin"
@@ -424,20 +466,10 @@ public partial class MainWindow : Window
 
     private void RemoveCompletedItems(IEnumerable<MediaPreviewItem> completedItems)
     {
-        try
+        OriginalGrid.SelectedItem = null;
+        foreach (var item in completedItems.ToList())
         {
-            _isSyncingSelection = true;
-            OriginalGrid.SelectedItem = null;
-            NewNamesGrid.SelectedItem = null;
-
-            foreach (var item in completedItems.ToList())
-            {
-                PreviewItems.Remove(item);
-            }
-        }
-        finally
-        {
-            _isSyncingSelection = false;
+            PreviewItems.Remove(item);
         }
 
         if (PreviewItems.Count > 0)
@@ -592,6 +624,13 @@ public partial class MainWindow : Window
         RefreshDestinations();
     }
 
+    private void OperationComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        UpdateActionState();
+    }
+
     private void UpdateCustomFormatVisibility()
     {
         if (CustomFormatLabel is null || CustomFormatTextBox is null || PresetComboBox is null)
@@ -637,14 +676,27 @@ public partial class MainWindow : Window
 
     private void OriginalGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        SyncSelection(OriginalGrid, NewNamesGrid);
         UpdateActionState();
     }
 
-    private void NewNamesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void MatchRow_Click(object sender, RoutedEventArgs e)
     {
-        SyncSelection(NewNamesGrid, OriginalGrid);
-        UpdateActionState();
+        if (sender is System.Windows.Controls.Button { DataContext: MediaPreviewItem item })
+        {
+            OriginalGrid.SelectedItem = item;
+            OriginalGrid.ScrollIntoView(item);
+            await RunBusyAsync(MatchSelectedAsync);
+        }
+    }
+
+    private async void ChooseRow_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button { DataContext: MediaPreviewItem item })
+        {
+            OriginalGrid.SelectedItem = item;
+            OriginalGrid.ScrollIntoView(item);
+            await RunBusyAsync(ChooseSelectedAsync);
+        }
     }
 
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
@@ -994,6 +1046,17 @@ public partial class MainWindow : Window
         return $"{value:0.##} {units[unit]}";
     }
 
+    internal static string FormatMatchSummary(IEnumerable<MediaPreviewItem> items)
+    {
+        var materialized = items.ToList();
+        var failed = materialized.Count(item => item.MatchState == "Blocked");
+        var review = materialized.Count(item =>
+            item.RequiresReview && item.MatchState != "Blocked");
+        var matched = materialized.Count - review - failed;
+        return $"Match complete: {matched} matched/planned, "
+            + $"{review} need review, {failed} failed.";
+    }
+
     private TmdbCandidate? ShowMatchPicker(
         MediaPreviewItem item,
         TmdbClient? client,
@@ -1026,26 +1089,4 @@ public partial class MainWindow : Window
         _ => RenamePreset.PlexStandard
     };
 
-    private void SyncSelection(System.Windows.Controls.DataGrid source, System.Windows.Controls.DataGrid target)
-    {
-        if (_isSyncingSelection)
-        {
-            return;
-        }
-
-        try
-        {
-            _isSyncingSelection = true;
-            var selectedItem = source.SelectedItem;
-            target.SelectedItem = selectedItem;
-            if (selectedItem is not null)
-            {
-                target.ScrollIntoView(selectedItem);
-            }
-        }
-        finally
-        {
-            _isSyncingSelection = false;
-        }
-    }
 }
