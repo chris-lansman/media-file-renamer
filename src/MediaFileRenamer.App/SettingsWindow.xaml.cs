@@ -21,6 +21,7 @@ public partial class SettingsWindow : Window
         _providerTester = providerTester ?? new MetadataProviderTestService();
         Settings = new AppSettings
         {
+            SchemaVersion = settings.SchemaVersion,
             TmdbApiKey = settings.TmdbApiKey,
             UseTmdbLookup = settings.UseTmdbLookup,
             TvdbApiKey = settings.TvdbApiKey,
@@ -28,7 +29,10 @@ public partial class SettingsWindow : Window
             UseTvdbFallback = settings.UseTvdbFallback,
             AutoMatchConfidencePercent = settings.AutoMatchConfidencePercent,
             DefaultOutputFolder = settings.DefaultOutputFolder,
-            DefaultOperation = settings.DefaultOperation
+            DefaultOperation = settings.DefaultOperation,
+            SavedShowMappings = settings.SavedShowMappings
+                .Select(mapping => mapping.Copy())
+                .ToList()
         };
 
         TmdbApiKeyBox.Text = Settings.TmdbApiKey;
@@ -41,6 +45,7 @@ public partial class SettingsWindow : Window
         SettingsPathTextBox.Text = settingsPath;
         DefaultOperationComboBox.SelectedIndex =
             Settings.DefaultOperation == FileOperation.Copy ? 1 : 0;
+        SavedShowMappingsGrid.ItemsSource = Settings.SavedShowMappings;
         if (isFirstRun)
         {
             Title = "Welcome to Media File Renamer";
@@ -50,6 +55,7 @@ public partial class SettingsWindow : Window
         }
         RegisterCredentialsForRedaction();
         ValidateSettings();
+        UpdateSavedShowMappingsState();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -113,6 +119,49 @@ public partial class SettingsWindow : Window
         if (SaveSettingsButton is not null)
         {
             ValidateSettings();
+        }
+    }
+
+    private void SavedShowMappingsGrid_SelectionChanged(
+        object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        UpdateSavedShowMappingsState();
+    }
+
+    private void RemoveSavedShowMapping_Click(object sender, RoutedEventArgs e)
+    {
+        if (SavedShowMappingsGrid.SelectedItem is not SavedShowMapping mapping)
+        {
+            return;
+        }
+
+        Settings.SavedShowMappings.Remove(mapping);
+        SavedShowMappingsGrid.Items.Refresh();
+        SavedShowMappingsGrid.SelectedItem = null;
+        SavedShowMappingsStatusTextBlock.Text =
+            $"Removed the remembered mapping for {mapping.Title}. Save Settings to keep this change.";
+        UpdateSavedShowMappingsState(preserveStatus: true);
+    }
+
+    private void UpdateSavedShowMappingsState(bool preserveStatus = false)
+    {
+        if (RemoveSavedShowMappingButton is null
+            || SavedShowMappingsStatusTextBlock is null)
+        {
+            return;
+        }
+
+        RemoveSavedShowMappingButton.IsEnabled =
+            SavedShowMappingsGrid?.SelectedItem is SavedShowMapping;
+        if (!preserveStatus)
+        {
+            SavedShowMappingsStatusTextBlock.Text =
+                Settings.SavedShowMappings.Count == 0
+                    ? "No show mappings have been remembered yet."
+                    : Settings.SavedShowMappings.Count == 1
+                        ? "1 remembered show mapping."
+                        : $"{Settings.SavedShowMappings.Count} remembered show mappings.";
         }
     }
 

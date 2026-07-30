@@ -171,6 +171,47 @@
                     </Grid>
                 </GroupBox>
 
+                <GroupBox Header="Remembered shows" Margin="0,0,0,14">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Confirmed TV matches can be reused for every episode in the same source folder. Remove a mapping to search providers again."
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource MutedTextBrush}"/>
+                        <DataGrid Grid.Row="1" x:Name="SavedShowMappingsGrid"
+                                  Margin="0,10,0,0" MinHeight="112" MaxHeight="210"
+                                  AutoGenerateColumns="False" IsReadOnly="True"
+                                  SelectionChanged="SavedShowMappingsGrid_SelectionChanged"
+                                  automation:AutomationProperties.Name="Remembered show mappings">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Show" Binding="{Binding Title}" Width="2*"/>
+                                <DataGridTextColumn Header="Source folder" Binding="{Binding SourcePath}" Width="3*"/>
+                                <DataGridTextColumn Header="TMDB" Binding="{Binding TmdbId}" Width="72"/>
+                                <DataGridTextColumn Header="TVDB" Binding="{Binding TvdbId}" Width="72"/>
+                                <DataGridTextColumn Header="Order" Binding="{Binding EpisodeOrder}" Width="90"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Grid Grid.Row="2" Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="SavedShowMappingsStatusTextBlock"
+                                       VerticalAlignment="Center" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MutedTextBrush}"
+                                       automation:AutomationProperties.Name="Remembered show mappings status"
+                                       automation:AutomationProperties.LiveSetting="Polite"/>
+                            <Button Grid.Column="1" x:Name="RemoveSavedShowMappingButton"
+                                    Content="_Remove selected" IsEnabled="False"
+                                    Click="RemoveSavedShowMapping_Click"
+                                    automation:AutomationProperties.Name="Remove selected remembered show mapping"/>
+                        </Grid>
+                    </Grid>
+                </GroupBox>
+
                 <GroupBox Header="Staging">
                     <Grid>
                         <Grid.RowDefinitions>
