@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Media File Renamer" Height="860" Width="1360" MinHeight="420" MinWidth="640"
         Icon="Assets/app-icon.ico" AllowDrop="True" Drop="Window_Drop"
-        KeyDown="Window_KeyDown">
+        KeyDown="Window_KeyDown"
+        KeyboardNavigation.TabNavigation="Cycle">
     <Window.Resources>
         <ResourceDictionary>
             <Style x:Key="AccessiblePreviewRowStyle" TargetType="DataGridRow"
