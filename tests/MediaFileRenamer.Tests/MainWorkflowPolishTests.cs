@@ -113,6 +113,9 @@ public sealed class MainWorkflowPolishTests
         var window = new MatchPickerWindow(item, null, item.TitleGuess, []);
 
         Assert.AreEqual("Classify Media", window.Title);
+        Assert.AreEqual(
+            "Classify this media file",
+            ((TextBlock)window.FindName("PickerHeadingTextBlock")).Text);
         Assert.IsLessThanOrEqualTo(500, window.Height);
         Assert.AreEqual(
             Visibility.Visible,
