@@ -141,6 +141,10 @@
 
                 <GroupBox Header="Matching" Margin="0,0,0,14">
                     <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
@@ -151,17 +155,26 @@
                                VerticalContentAlignment="Center"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <TextBox x:Name="AutoMatchConfidenceTextBox" Width="64"
+                                     TextChanged="ValidationField_Changed"
                                      automation:AutomationProperties.Name="Automatic match confidence percentage"/>
                             <TextBlock Text="% confidence before choosing automatically"
                                        VerticalAlignment="Center" Margin="8,0,0,0"
                                        Foreground="{DynamicResource MutedTextBrush}"/>
                         </StackPanel>
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   x:Name="ConfidenceValidationTextBlock"
+                                   Visibility="Collapsed" Margin="0,6,0,0"
+                                   Foreground="{DynamicResource BlockedBrush}"
+                                   TextWrapping="Wrap"
+                                   automation:AutomationProperties.Name="Automatic match confidence error"
+                                   automation:AutomationProperties.LiveSetting="Assertive"/>
                     </Grid>
                 </GroupBox>
 
                 <GroupBox Header="Staging">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -178,26 +191,35 @@
                                VerticalContentAlignment="Center"/>
                         <TextBox Grid.Row="0" Grid.Column="1" x:Name="DefaultOutputFolderTextBox"
                                  Margin="0,0,8,0"
+                                 TextChanged="ValidationField_Changed"
                                  automation:AutomationProperties.Name="Default output folder"/>
                         <Button Grid.Row="0" Grid.Column="2" Content="_Browse..." Click="BrowseOutput_Click"
                                 automation:AutomationProperties.Name="Browse for default output folder"/>
 
-                        <Label Grid.Row="1" Grid.Column="0" Content="Default _operation"
+                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                   x:Name="OutputFolderValidationTextBlock"
+                                   Visibility="Collapsed" Margin="0,6,0,0"
+                                   Foreground="{DynamicResource BlockedBrush}"
+                                   TextWrapping="Wrap"
+                                   automation:AutomationProperties.Name="Default output folder error"
+                                   automation:AutomationProperties.LiveSetting="Assertive"/>
+
+                        <Label Grid.Row="2" Grid.Column="0" Content="Default _operation"
                                Target="{Binding ElementName=DefaultOperationComboBox}"
                                Style="{StaticResource SettingsLabelStyle}"
                                VerticalContentAlignment="Center" Margin="0,14,0,0"/>
-                        <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                        <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
                                   x:Name="DefaultOperationComboBox" Margin="0,14,0,0"
                                   automation:AutomationProperties.Name="Default file operation">
                             <ComboBoxItem Content="Move to staged folder"/>
                             <ComboBoxItem Content="Copy to staged folder"/>
                         </ComboBox>
 
-                        <Label Grid.Row="2" Grid.Column="0" Content="Settings file"
+                        <Label Grid.Row="3" Grid.Column="0" Content="Settings file"
                                Target="{Binding ElementName=SettingsPathTextBox}"
                                Style="{StaticResource SettingsLabelStyle}"
                                VerticalContentAlignment="Top" Margin="0,14,0,0"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                        <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
                                  x:Name="SettingsPathTextBox" Margin="0,14,0,0"
                                  IsReadOnly="True" TextWrapping="Wrap" MinHeight="48"
                                  automation:AutomationProperties.Name="Settings file path"/>

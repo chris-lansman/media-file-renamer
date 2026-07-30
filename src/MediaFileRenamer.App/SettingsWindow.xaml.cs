@@ -1,4 +1,5 @@
 using MediaFileRenamer.App.Services;
+using System.IO;
 using System.Windows;
 using Forms = System.Windows.Forms;
 
@@ -48,19 +49,35 @@ public partial class SettingsWindow : Window
             DefaultOperationComboBox.SelectedIndex = 1;
         }
         RegisterCredentialsForRedaction();
+        ValidateSettings();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        var validation = ValidateSettings(checkFolderAccessibility: true);
+        if (!validation.IsValid)
+        {
+            if (!string.IsNullOrEmpty(validation.ConfidenceError))
+            {
+                AutoMatchConfidenceTextBox.Focus();
+                AutoMatchConfidenceTextBox.SelectAll();
+            }
+            else
+            {
+                DefaultOutputFolderTextBox.Focus();
+                DefaultOutputFolderTextBox.SelectAll();
+            }
+
+            return;
+        }
+
         Settings.TmdbApiKey = TmdbApiKeyBox.Text.Trim();
         Settings.UseTmdbLookup = UseTmdbLookupCheckBox.IsChecked == true;
         Settings.TvdbApiKey = TvdbApiKeyBox.Text.Trim();
         Settings.TvdbPin = TvdbPinBox.Text.Trim();
         Settings.UseTvdbFallback = UseTvdbFallbackCheckBox.IsChecked == true;
-        Settings.AutoMatchConfidencePercent = ParseConfidence(AutoMatchConfidenceTextBox.Text);
-        Settings.DefaultOutputFolder = string.IsNullOrWhiteSpace(DefaultOutputFolderTextBox.Text)
-            ? AppSettings.GetDefaultOutputFolder()
-            : DefaultOutputFolderTextBox.Text.Trim();
+        Settings.AutoMatchConfidencePercent = validation.Confidence;
+        Settings.DefaultOutputFolder = validation.OutputFolder;
         Settings.DefaultOperation = DefaultOperationComboBox.SelectedIndex == 1
             ? FileOperation.Copy
             : FileOperation.Move;
@@ -86,6 +103,16 @@ public partial class SettingsWindow : Window
         if (dialog.ShowDialog() == Forms.DialogResult.OK)
         {
             DefaultOutputFolderTextBox.Text = dialog.SelectedPath;
+        }
+    }
+
+    private void ValidationField_Changed(
+        object sender,
+        System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (SaveSettingsButton is not null)
+        {
+            ValidateSettings();
         }
     }
 
@@ -150,13 +177,159 @@ public partial class SettingsWindow : Window
         textBlock.Text = result.Message;
     }
 
-    private static int ParseConfidence(string value)
+    private SettingsValidationResult ValidateSettings(
+        bool checkFolderAccessibility = false)
     {
-        if (!int.TryParse(value, out var confidence))
+        var result = ValidateSettingsValues(
+            AutoMatchConfidenceTextBox.Text,
+            DefaultOutputFolderTextBox.Text,
+            checkFolderAccessibility);
+
+        ShowValidationError(
+            AutoMatchConfidenceTextBox,
+            ConfidenceValidationTextBlock,
+            result.ConfidenceError);
+        ShowValidationError(
+            DefaultOutputFolderTextBox,
+            OutputFolderValidationTextBlock,
+            result.OutputFolderError);
+        SaveSettingsButton.IsEnabled = result.IsValid;
+        return result;
+    }
+
+    private void ShowValidationError(
+        System.Windows.Controls.Control control,
+        System.Windows.Controls.TextBlock errorText,
+        string message)
+    {
+        errorText.Text = message;
+        errorText.Visibility = string.IsNullOrEmpty(message)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        System.Windows.Automation.AutomationProperties.SetHelpText(control, message);
+        if (string.IsNullOrEmpty(message))
         {
-            return 92;
+            control.SetResourceReference(
+                System.Windows.Controls.Control.BorderBrushProperty,
+                "BorderBrush");
+        }
+        else
+        {
+            control.SetResourceReference(
+                System.Windows.Controls.Control.BorderBrushProperty,
+                "BlockedBrush");
+        }
+    }
+
+    internal static SettingsValidationResult ValidateSettingsValues(
+        string confidenceText,
+        string outputFolderText,
+        bool checkFolderAccessibility = true)
+    {
+        var confidenceError = "";
+        var confidence = 0;
+        if (!int.TryParse(confidenceText, out confidence))
+        {
+            confidenceError = "Enter a whole-number confidence from 80 through 100.";
+        }
+        else if (confidence is < 80 or > 100)
+        {
+            confidenceError = "Confidence must be from 80 through 100.";
         }
 
-        return Math.Clamp(confidence, 80, 100);
+        var (outputFolder, outputFolderError) =
+            ValidateOutputFolder(outputFolderText, checkFolderAccessibility);
+        return new SettingsValidationResult(
+            confidence,
+            outputFolder,
+            confidenceError,
+            outputFolderError);
     }
+
+    private static (string OutputFolder, string Error) ValidateOutputFolder(
+        string value,
+        bool checkAccessibility)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return ("", "Choose an output folder.");
+        }
+
+        string fullPath;
+        try
+        {
+            var trimmed = value.Trim();
+            if (!Path.IsPathFullyQualified(trimmed))
+            {
+                return ("", "Enter a complete folder path, such as C:\\Media\\Renamed.");
+            }
+
+            fullPath = Path.GetFullPath(trimmed);
+        }
+        catch (Exception ex) when (
+            ex is ArgumentException
+                or NotSupportedException
+                or PathTooLongException)
+        {
+            return ("", "The output folder path is not valid.");
+        }
+
+        if (!checkAccessibility)
+        {
+            return (fullPath, "");
+        }
+
+        string existingPath;
+        try
+        {
+            existingPath = fullPath;
+            while (!Directory.Exists(existingPath))
+            {
+                var parent = Directory.GetParent(existingPath);
+                if (parent is null)
+                {
+                    return (
+                        "",
+                        "The output folder is unavailable. Connect the drive or network location and try again.");
+                }
+
+                existingPath = parent.FullName;
+            }
+        }
+        catch (Exception ex) when (
+            ex is ArgumentException
+                or IOException
+                or UnauthorizedAccessException
+                or System.Security.SecurityException)
+        {
+            return ("", "The output folder path is not valid or cannot be accessed.");
+        }
+
+        try
+        {
+            _ = Directory.EnumerateFileSystemEntries(existingPath).Take(1).ToList();
+        }
+        catch (Exception ex) when (
+            ex is IOException
+                or UnauthorizedAccessException
+                or System.Security.SecurityException)
+        {
+            return (
+                "",
+                "The output folder cannot be accessed. Check its permissions or connection.");
+        }
+
+        return (fullPath, "");
+    }
+}
+
+internal sealed record SettingsValidationResult(
+    int Confidence,
+    string OutputFolder,
+    string ConfidenceError,
+    string OutputFolderError)
+{
+    public bool IsValid =>
+        string.IsNullOrEmpty(ConfidenceError)
+        && string.IsNullOrEmpty(OutputFolderError);
 }
