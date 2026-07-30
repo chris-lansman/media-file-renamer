@@ -33,6 +33,10 @@ public static class MediaFileRenamerProviderAcceptanceNative
 {
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindow(IntPtr windowHandle, int command);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetForegroundWindow(IntPtr windowHandle);
 }
 '@
@@ -350,10 +354,14 @@ try {
             -Absent | Out-Null
     }
 
+    $mainHandle = [IntPtr]$main.Current.NativeWindowHandle
+    [void][MediaFileRenamerProviderAcceptanceNative]::ShowWindow($mainHandle, 9)
     [void][MediaFileRenamerProviderAcceptanceNative]::SetForegroundWindow(
-        [IntPtr]$main.Current.NativeWindowHandle)
+        $mainHandle)
+    $main.SetFocus()
+    Start-Sleep -Milliseconds 250
     [System.Windows.Forms.SendKeys]::SendWait("%f")
-    Start-Sleep -Milliseconds 100
+    Start-Sleep -Milliseconds 250
     [System.Windows.Forms.SendKeys]::SendWait("s")
 
     $settings = Wait-UiaWindow `
@@ -464,12 +472,12 @@ try {
         -Root $main `
         -AutomationId "ChooseSelectedButton"
     Wait-UiaElementEnabled -Element $choose
-    $proposedGrid = Find-UiaElement `
+    $reviewGrid = Find-UiaElement `
         -Root $main `
-        -AutomationId "NewNamesGrid"
+        -AutomationId "OriginalGrid"
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
-        $proposedRows = @(Get-UiaRows -Grid $proposedGrid)
+        $proposedRows = @(Get-UiaRows -Grid $reviewGrid)
         $rowNames = @(
             for ($index = 0; $index -lt $proposedRows.Count; $index++) {
                 $proposedRows[$index].Current.Name
@@ -549,12 +557,12 @@ try {
     Wait-UiaElementEnabled -Element (
         Find-UiaElement -Root $main -AutomationId "ChooseSelectedButton")
 
-    $proposedGrid = Find-UiaElement `
+    $reviewGrid = Find-UiaElement `
         -Root $main `
-        -AutomationId "NewNamesGrid"
+        -AutomationId "OriginalGrid"
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
-        $fallbackRows = @(Get-UiaRows -Grid $proposedGrid)
+        $fallbackRows = @(Get-UiaRows -Grid $reviewGrid)
         $fallbackMatched = @(
             $fallbackRows | Where-Object { $_.Current.Name.Contains("TVDB") }
         ).Count -gt 0
