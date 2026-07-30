@@ -1,0 +1,33 @@
+name: Scheduled maintenance
+
+on:
+  schedule:
+    - cron: "23 20 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  dependency-audit:
+    name: Audit dependencies
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Audit vulnerable and deprecated packages
+        shell: pwsh
+        run: ./.github/scripts/Test-NuGetAudit.ps1 -SolutionPath MediaFileRenamer.sln

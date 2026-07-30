@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -21,7 +22,6 @@ public partial class MainWindow : Window
     private readonly MetadataMatchService _matchService = new();
     private readonly AppSettingsService _settingsService = new();
     private AppSettings _settings = new();
-    private bool _isSyncingSelection;
     private bool _isBusy;
     private bool _firstRunPromptShown;
     private readonly bool _showFirstRun;
@@ -116,28 +116,73 @@ public partial class MainWindow : Window
 
     private async Task MatchAllAsync()
     {
+        await MatchItemsAsync(PreviewItems.ToList(), retryExistingMatches: false);
+    }
+
+    private async void RetryUnresolved_Click(object sender, RoutedEventArgs e)
+    {
+        await RunBusyAsync(RetryUnresolvedAsync);
+    }
+
+    private async Task RetryUnresolvedAsync()
+    {
+        var unresolved = PreviewItems.Where(item => item.RequiresReview).ToList();
+        if (unresolved.Count == 0)
+        {
+            StatusTextBlock.Text = "There are no unresolved files to retry.";
+            return;
+        }
+
+        await MatchItemsAsync(unresolved, retryExistingMatches: true);
+    }
+
+    private async Task MatchItemsAsync(
+        IReadOnlyList<MediaPreviewItem> items,
+        bool retryExistingMatches)
+    {
         var key = _settings.TmdbApiKey.Trim();
         var useTmdb = _settings.UseTmdbLookup && !string.IsNullOrWhiteSpace(key);
         var client = useTmdb ? new TmdbClient(key) : null;
         var tvdbClient = CreateTvdbFallback();
+        var resolutionClient = client ?? new TmdbClient("");
 
-        StatusTextBlock.Text = useTmdb ? "Matching all files with TMDB..." : "Planning all filenames from local names...";
+        StatusTextBlock.Text = useTmdb
+            ? retryExistingMatches
+                ? $"Retrying {items.Count} unresolved file(s) with configured providers..."
+                : "Matching all files with configured providers..."
+            : "Planning filenames from local names; provider matching is not configured.";
 
-        foreach (var item in PreviewItems)
+        foreach (var item in items)
         {
-            if (client is not null && item.TmdbId is null && item.TvdbId is null)
+            var rememberedMapping = FindSavedShowMapping(item);
+            var canUseRememberedMapping = rememberedMapping is not null
+                && IsUsableRememberedMapping(
+                    rememberedMapping,
+                    client is not null,
+                    tvdbClient is not null);
+            if ((client is not null || canUseRememberedMapping)
+                && (retryExistingMatches || (item.TmdbId is null && item.TvdbId is null)))
             {
-                var selected = await MatchItemAsync(client, tvdbClient, item, showPickerForUncertain: true);
+                var selected = await MatchItemAsync(
+                    resolutionClient,
+                    tvdbClient,
+                    item,
+                    showPickerForUncertain: true,
+                    canSearchTmdb: client is not null);
                 if (selected is not null)
                 {
-                    await ApplyTvShowIdentityToRelatedItemsAsync(client, tvdbClient, item, selected);
+                    await ApplyTvShowIdentityToRelatedItemsAsync(
+                        resolutionClient,
+                        tvdbClient,
+                        item,
+                        selected);
                 }
             }
 
             UpdateDestination(item);
         }
 
-        StatusTextBlock.Text = $"Ready: {PreviewItems.Count} item(s) matched/planned.";
+        StatusTextBlock.Text = FormatMatchSummary(PreviewItems);
     }
 
     private async void MatchSelected_Click(object sender, RoutedEventArgs e)
@@ -154,19 +199,43 @@ public partial class MainWindow : Window
         }
 
         var key = _settings.TmdbApiKey.Trim();
-        if (string.IsNullOrWhiteSpace(key))
+        var client = _settings.UseTmdbLookup && !string.IsNullOrWhiteSpace(key)
+            ? new TmdbClient(key)
+            : null;
+        var tvdbClient = CreateTvdbFallback();
+        var rememberedMapping = FindSavedShowMapping(item);
+        if (client is null
+            && (rememberedMapping is null
+                || !IsUsableRememberedMapping(
+                    rememberedMapping,
+                    hasTmdbClient: false,
+                    hasTvdbClient: tvdbClient is not null)))
         {
-            System.Windows.MessageBox.Show(this, "Add your TMDB API key in File > Settings before matching.", "TMDB key needed", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(
+                this,
+                "Add your TMDB API key in File > Settings before matching, "
+                + "or remember a TVDB-backed show mapping for this folder.",
+                "Metadata credentials needed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
         StatusTextBlock.Text = $"Matching {item.SourceFileName}...";
-        var client = new TmdbClient(key);
-        var tvdbClient = CreateTvdbFallback();
-        var selected = await MatchItemAsync(client, tvdbClient, item, showPickerForUncertain: true);
+        var resolutionClient = client ?? new TmdbClient("");
+        var selected = await MatchItemAsync(
+            resolutionClient,
+            tvdbClient,
+            item,
+            showPickerForUncertain: true,
+            canSearchTmdb: client is not null);
         if (selected is not null)
         {
-            await ApplyTvShowIdentityToRelatedItemsAsync(client, tvdbClient, item, selected);
+            await ApplyTvShowIdentityToRelatedItemsAsync(
+                resolutionClient,
+                tvdbClient,
+                item,
+                selected);
         }
 
         UpdateDestination(item);
@@ -301,17 +370,8 @@ public partial class MainWindow : Window
 
     private void Clear_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            _isSyncingSelection = true;
-            OriginalGrid.SelectedItem = null;
-            NewNamesGrid.SelectedItem = null;
-            PreviewItems.Clear();
-        }
-        finally
-        {
-            _isSyncingSelection = false;
-        }
+        OriginalGrid.SelectedItem = null;
+        PreviewItems.Clear();
 
         StatusTextBlock.Text = "Cleared.";
         UpdateActionState();
@@ -376,6 +436,7 @@ public partial class MainWindow : Window
         MatchAllButton.IsEnabled = enabled;
         MatchSelectedButton.IsEnabled = enabled;
         ChooseSelectedButton.IsEnabled = enabled;
+        RetryUnresolvedButton.IsEnabled = enabled;
         RenameButton.IsEnabled = enabled;
     }
 
@@ -389,14 +450,20 @@ public partial class MainWindow : Window
             || MatchAllButton is null
             || MatchSelectedButton is null
             || ChooseSelectedButton is null
+            || RetryUnresolvedButton is null
             || RenameButton is null
-            || ReviewCountTextBlock is null)
+            || ReviewCountTextBlock is null
+            || EmptyDropPanel is null
+            || SelectedFileEditor is null
+            || RememberShowMappingButton is null
+            || RememberShowMappingStatusTextBlock is null)
         {
             return;
         }
 
         var hasItems = PreviewItems.Count > 0;
-        var hasSelection = OriginalGrid.SelectedItem is MediaPreviewItem;
+        var selectedItem = OriginalGrid.SelectedItem as MediaPreviewItem;
+        var hasSelection = selectedItem is not null;
         var reviewCount = PreviewItems.Count(item => item.RequiresReview);
         AddFilesButton.IsEnabled = true;
         AddFolderButton.IsEnabled = true;
@@ -404,12 +471,23 @@ public partial class MainWindow : Window
         MatchAllButton.IsEnabled = hasItems;
         MatchSelectedButton.IsEnabled = hasSelection;
         ChooseSelectedButton.IsEnabled = hasSelection;
+        RetryUnresolvedButton.IsEnabled = hasItems && reviewCount > 0;
         RenameButton.IsEnabled = hasItems
             && reviewCount == 0
             && PreviewItems.All(item => !string.IsNullOrWhiteSpace(item.DestinationPath));
         RenameButton.ToolTip = reviewCount > 0
             ? "Resolve every item marked Review needed, Ready to match, or Blocked first."
             : null;
+        EmptyDropPanel.Visibility = hasItems ? Visibility.Collapsed : Visibility.Visible;
+        SelectedFileEditor.Visibility = hasSelection ? Visibility.Visible : Visibility.Collapsed;
+        UpdateRememberedShowMappingState(selectedItem);
+
+        var operation = OperationComboBox?.SelectedIndex == 1 ? "Copy" : "Move";
+        var fileNoun = PreviewItems.Count == 1 ? "file" : "files";
+        RenameButton.Content = $"{operation} {PreviewItems.Count} {fileNoun}";
+        AutomationProperties.SetName(
+            RenameButton,
+            $"{operation} {PreviewItems.Count} reviewed {fileNoun}");
 
         ReviewCountTextBlock.Text = !hasItems
             ? "Add files to begin"
@@ -424,20 +502,10 @@ public partial class MainWindow : Window
 
     private void RemoveCompletedItems(IEnumerable<MediaPreviewItem> completedItems)
     {
-        try
+        OriginalGrid.SelectedItem = null;
+        foreach (var item in completedItems.ToList())
         {
-            _isSyncingSelection = true;
-            OriginalGrid.SelectedItem = null;
-            NewNamesGrid.SelectedItem = null;
-
-            foreach (var item in completedItems.ToList())
-            {
-                PreviewItems.Remove(item);
-            }
-        }
-        finally
-        {
-            _isSyncingSelection = false;
+            PreviewItems.Remove(item);
         }
 
         if (PreviewItems.Count > 0)
@@ -450,6 +518,77 @@ public partial class MainWindow : Window
     private void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         ShowSettings(isFirstRun: false);
+    }
+
+    private void RememberShowMapping_Click(object sender, RoutedEventArgs e)
+    {
+        if (OriginalGrid.SelectedItem is not MediaPreviewItem item
+            || !CanRememberShowMapping(item))
+        {
+            RememberShowMappingStatusTextBlock.Text =
+                "Choose a confirmed TV match before remembering this folder.";
+            return;
+        }
+
+        try
+        {
+            var mapping = _settingsService.UpsertShowMapping(
+                new SavedShowMapping
+                {
+                    SourcePath = item.SourceGroupPath,
+                    Title = item.MatchedTitle,
+                    MediaType = item.MediaType,
+                    TmdbId = item.TmdbId,
+                    TvdbId = item.TvdbId,
+                    EpisodeOrder = item.EpisodeOrder
+                });
+            _settings = _settingsService.Load();
+            RememberShowMappingStatusTextBlock.Text =
+                $"Remembered {mapping.Title} for {mapping.SourcePath}.";
+            RememberShowMappingButton.Content = "Update remembered show";
+            DiagnosticLog.Current.Information(
+                "A show mapping was remembered for a source folder.");
+        }
+        catch (Exception ex) when (
+            ex is ArgumentException
+                or IOException
+                or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Current.Error(
+                "Could not save a remembered show mapping.",
+                ex);
+            RememberShowMappingStatusTextBlock.Text =
+                "The show mapping could not be saved. Check the settings folder and try again.";
+        }
+    }
+
+    private void UpdateRememberedShowMappingState(MediaPreviewItem? item)
+    {
+        if (item is null)
+        {
+            RememberShowMappingButton.IsEnabled = false;
+            RememberShowMappingStatusTextBlock.Text = "";
+            return;
+        }
+
+        var existing = FindSavedShowMapping(item);
+        RememberShowMappingButton.IsEnabled = CanRememberShowMapping(item);
+        RememberShowMappingButton.Content = existing is null
+            ? "Always use this show for this folder"
+            : "Update remembered show";
+        RememberShowMappingStatusTextBlock.Text = existing is null
+            ? CanRememberShowMapping(item)
+                ? "Remember this confirmed match to skip future series searches in this folder."
+                : "A confirmed TV provider match is required before this folder can be remembered."
+            : $"Remembered as {existing.Title} using {existing.EpisodeOrder} order.";
+    }
+
+    private static bool CanRememberShowMapping(MediaPreviewItem item)
+    {
+        return string.Equals(item.MediaType, "TV", StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(item.MatchedTitle)
+            && !string.IsNullOrWhiteSpace(item.SourceGroupPath)
+            && (item.TmdbId is > 0 || item.TvdbId is > 0);
     }
 
     private void ShowSettings(bool isFirstRun)
@@ -592,6 +731,13 @@ public partial class MainWindow : Window
         RefreshDestinations();
     }
 
+    private void OperationComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        UpdateActionState();
+    }
+
     private void UpdateCustomFormatVisibility()
     {
         if (CustomFormatLabel is null || CustomFormatTextBox is null || PresetComboBox is null)
@@ -637,14 +783,27 @@ public partial class MainWindow : Window
 
     private void OriginalGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        SyncSelection(OriginalGrid, NewNamesGrid);
         UpdateActionState();
     }
 
-    private void NewNamesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void MatchRow_Click(object sender, RoutedEventArgs e)
     {
-        SyncSelection(NewNamesGrid, OriginalGrid);
-        UpdateActionState();
+        if (sender is System.Windows.Controls.Button { DataContext: MediaPreviewItem item })
+        {
+            OriginalGrid.SelectedItem = item;
+            OriginalGrid.ScrollIntoView(item);
+            await RunBusyAsync(MatchSelectedAsync);
+        }
+    }
+
+    private async void ChooseRow_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button { DataContext: MediaPreviewItem item })
+        {
+            OriginalGrid.SelectedItem = item;
+            OriginalGrid.ScrollIntoView(item);
+            await RunBusyAsync(ChooseSelectedAsync);
+        }
     }
 
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
@@ -787,9 +946,61 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<TmdbCandidate?> MatchItemAsync(TmdbClient client, TvdbClient? tvdbClient, MediaPreviewItem item, bool showPickerForUncertain, bool alwaysShowPicker = false)
+    private async Task<TmdbCandidate?> MatchItemAsync(
+        TmdbClient client,
+        TvdbClient? tvdbClient,
+        MediaPreviewItem item,
+        bool showPickerForUncertain,
+        bool alwaysShowPicker = false,
+        bool canSearchTmdb = true)
     {
         var cancellationToken = _operationCancellation?.Token ?? CancellationToken.None;
+        var rememberedMapping = alwaysShowPicker ? null : FindSavedShowMapping(item);
+        if (rememberedMapping is not null
+            && IsUsableRememberedMapping(
+                rememberedMapping,
+                canSearchTmdb,
+                tvdbClient is not null))
+        {
+            item.EpisodeOrder = rememberedMapping.EpisodeOrder;
+            var rememberedCandidate = CreateRememberedCandidate(
+                rememberedMapping,
+                includeTmdbId: canSearchTmdb);
+            var rememberedResolution = await _metadataResolver.ResolveAsync(
+                client,
+                tvdbClient,
+                rememberedCandidate,
+                item,
+                cancellationToken);
+            var rememberedMatch = rememberedResolution.Match;
+            item.MediaType = rememberedMapping.MediaType;
+            item.TmdbId = rememberedMapping.TmdbId ?? rememberedMatch.TmdbId;
+            item.TvdbId = rememberedMapping.TvdbId ?? rememberedMatch.TvdbId;
+            item.MatchedTitle = rememberedMapping.Title;
+            item.Year = rememberedMatch.Year ?? item.Year;
+            item.Season = rememberedMatch.Season ?? item.Season;
+            item.Episode = rememberedMatch.Episode ?? item.Episode;
+            item.EpisodeTitle =
+                rememberedMatch.EpisodeTitle ?? item.EpisodeTitle;
+            item.Status = item.Season is null || item.Episode is null
+                ? "TV matched; episode number needs review"
+                : string.IsNullOrWhiteSpace(item.EpisodeTitle)
+                    ? "TV matched; episode title needs review"
+                    : rememberedResolution.EpisodeSource
+                        == EpisodeMetadataSource.Tvdb
+                        ? "TVDB remembered folder match"
+                        : "TMDB remembered folder match";
+            RememberShowMappingStatusTextBlock.Text =
+                $"Used the remembered mapping for {rememberedMapping.Title}.";
+            return rememberedCandidate;
+        }
+
+        if (!canSearchTmdb)
+        {
+            item.Status = "Needs review";
+            return null;
+        }
+
         var primaryQuery = item.TitleGuess;
         var primaryResult = await _matchService.SearchAsync(
             item,
@@ -918,6 +1129,69 @@ public partial class MainWindow : Window
         return selected;
     }
 
+    private SavedShowMapping? FindSavedShowMapping(MediaPreviewItem item)
+    {
+        if (string.IsNullOrWhiteSpace(item.SourceGroupPath))
+        {
+            return null;
+        }
+
+        string identity;
+        try
+        {
+            identity = AppSettingsService.NormalizeSourceIdentity(
+                item.SourceGroupPath);
+        }
+        catch (Exception ex) when (
+            ex is ArgumentException
+                or NotSupportedException
+                or PathTooLongException)
+        {
+            return null;
+        }
+
+        return _settings.SavedShowMappings.FirstOrDefault(mapping =>
+            string.Equals(
+                mapping.SourceIdentity,
+                identity,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static bool IsUsableRememberedMapping(
+        SavedShowMapping mapping,
+        bool hasTmdbClient,
+        bool hasTvdbClient)
+    {
+        return string.Equals(mapping.MediaType, "TV", StringComparison.Ordinal)
+            && ((hasTmdbClient && mapping.TmdbId is not null)
+                || (hasTvdbClient && mapping.TvdbId is not null));
+    }
+
+    internal static TmdbCandidate CreateRememberedCandidate(
+        SavedShowMapping mapping,
+        bool includeTmdbId)
+    {
+        var tmdbId = includeTmdbId ? mapping.TmdbId : null;
+        var provider = tmdbId is not null && mapping.TvdbId is not null
+            ? MetadataProvider.TmdbAndTvdb
+            : tmdbId is not null
+                ? MetadataProvider.Tmdb
+                : MetadataProvider.Tvdb;
+        return new TmdbCandidate(
+            tmdbId ?? 0,
+            mapping.MediaType,
+            mapping.Title,
+            null,
+            "",
+            "",
+            "")
+        {
+            TmdbId = tmdbId,
+            TvdbId = mapping.TvdbId,
+            Provider = provider
+        };
+    }
+
     private TvdbClient? CreateTvdbFallback()
     {
         var key = _settings.TvdbApiKey.Trim();
@@ -947,6 +1221,7 @@ public partial class MainWindow : Window
             }
 
             TvShowIdentityMatcher.Apply(relatedItem, identity);
+            relatedItem.EpisodeOrder = matchedItem.EpisodeOrder;
             var resolution = await _metadataResolver.ResolveAsync(
                 client,
                 tvdbClient,
@@ -994,6 +1269,17 @@ public partial class MainWindow : Window
         return $"{value:0.##} {units[unit]}";
     }
 
+    internal static string FormatMatchSummary(IEnumerable<MediaPreviewItem> items)
+    {
+        var materialized = items.ToList();
+        var failed = materialized.Count(item => item.MatchState == "Blocked");
+        var review = materialized.Count(item =>
+            item.RequiresReview && item.MatchState != "Blocked");
+        var matched = materialized.Count - review - failed;
+        return $"Match complete: {matched} matched/planned, "
+            + $"{review} need review, {failed} failed.";
+    }
+
     private TmdbCandidate? ShowMatchPicker(
         MediaPreviewItem item,
         TmdbClient? client,
@@ -1026,26 +1312,4 @@ public partial class MainWindow : Window
         _ => RenamePreset.PlexStandard
     };
 
-    private void SyncSelection(System.Windows.Controls.DataGrid source, System.Windows.Controls.DataGrid target)
-    {
-        if (_isSyncingSelection)
-        {
-            return;
-        }
-
-        try
-        {
-            _isSyncingSelection = true;
-            var selectedItem = source.SelectedItem;
-            target.SelectedItem = selectedItem;
-            if (selectedItem is not null)
-            {
-                target.ScrollIntoView(selectedItem);
-            }
-        }
-        finally
-        {
-            _isSyncingSelection = false;
-        }
-    }
 }

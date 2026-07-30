@@ -7,16 +7,23 @@ namespace MediaFileRenamer.App.Services;
 
 public sealed class TmdbClient
 {
+    private static readonly TimeSpan SearchCacheLifetime = TimeSpan.FromDays(1);
+    private static readonly TimeSpan MetadataCacheLifetime = TimeSpan.FromDays(14);
     private readonly string _apiKey;
     private readonly HttpClient _httpClient;
+    private readonly MetadataDiskCache? _diskCache;
     private readonly Dictionary<int, IReadOnlyList<TmdbEpisode>> _episodeCache = [];
     private readonly Dictionary<(int ShowId, int Season), IReadOnlyList<TmdbEpisode>> _seasonEpisodeCache = [];
     private readonly Dictionary<int, int?> _tvdbIdCache = [];
 
-    public TmdbClient(string apiKey, HttpClient? httpClient = null)
+    public TmdbClient(
+        string apiKey,
+        HttpClient? httpClient = null,
+        MetadataDiskCache? metadataCache = null)
     {
         _apiKey = apiKey;
         _httpClient = httpClient ?? new HttpClient();
+        _diskCache = metadataCache ?? (httpClient is null ? MetadataDiskCache.Shared : null);
         _httpClient.BaseAddress ??= new Uri("https://api.themoviedb.org/3/");
         _httpClient.Timeout = TimeSpan.FromSeconds(30);
     }
@@ -92,6 +99,13 @@ public sealed class TmdbClient
         int tvdbId,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        var cacheKey = MetadataCacheKey.ResourceById("tmdb", "tv-by-tvdb-id", tvdbId);
+        if (_diskCache?.TryGet<TmdbCandidate?>(cacheKey, out var cached) == true)
+        {
+            return cached;
+        }
+
         try
         {
             var url = $"find/{tvdbId}?api_key={Uri.EscapeDataString(_apiKey)}&external_source=tvdb_id";
@@ -102,7 +116,7 @@ public sealed class TmdbClient
                 stream,
                 cancellationToken: cancellationToken);
             var candidate = result?.TvResults?.FirstOrDefault();
-            return candidate is null || string.IsNullOrWhiteSpace(candidate.Name)
+            var match = candidate is null || string.IsNullOrWhiteSpace(candidate.Name)
                 ? null
                 : new TmdbCandidate(
                     candidate.Id,
@@ -116,6 +130,8 @@ public sealed class TmdbClient
                     TvdbId = tvdbId,
                     Provider = MetadataProvider.TmdbAndTvdb
                 };
+            _diskCache?.Set(cacheKey, match, MetadataCacheLifetime);
+            return match;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -175,6 +191,14 @@ public sealed class TmdbClient
         string query,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        var cacheKey = MetadataCacheKey.Search("tmdb", "movie", query);
+        if (_diskCache?.TryGet<List<TmdbCandidate>>(cacheKey, out var cached) == true
+            && cached is not null)
+        {
+            return cached;
+        }
+
         var url = $"search/movie?api_key={Uri.EscapeDataString(_apiKey)}&query={Uri.EscapeDataString(query)}";
 
         using var response = await SendGetAsync(url, cancellationToken);
@@ -184,7 +208,7 @@ public sealed class TmdbClient
             stream,
             cancellationToken: cancellationToken);
 
-        return result?.Results?
+        var candidates = result?.Results?
             .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Title))
             .Take(8)
             .Select(candidate => new TmdbCandidate(
@@ -201,6 +225,8 @@ public sealed class TmdbClient
                 Provider = MetadataProvider.Tmdb
             })
             .ToList() ?? [];
+        _diskCache?.Set(cacheKey, candidates, SearchCacheLifetime);
+        return candidates;
     }
 
     private async Task<IReadOnlyList<TmdbCandidate>> SearchTvCandidatesAsync(
@@ -208,6 +234,14 @@ public sealed class TmdbClient
         string query,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        var cacheKey = MetadataCacheKey.Search("tmdb", "tv", query);
+        if (_diskCache?.TryGet<List<TmdbCandidate>>(cacheKey, out var cached) == true
+            && cached is not null)
+        {
+            return cached;
+        }
+
         var url = $"search/tv?api_key={Uri.EscapeDataString(_apiKey)}&query={Uri.EscapeDataString(query)}";
         using var response = await SendGetAsync(url, cancellationToken);
         EnsureSuccess(response);
@@ -216,7 +250,7 @@ public sealed class TmdbClient
             stream,
             cancellationToken: cancellationToken);
 
-        return result?.Results?
+        var candidates = result?.Results?
             .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name))
             .Take(8)
             .Select(candidate => new TmdbCandidate(
@@ -233,6 +267,8 @@ public sealed class TmdbClient
                 Provider = MetadataProvider.Tmdb
             })
             .ToList() ?? [];
+        _diskCache?.Set(cacheKey, candidates, SearchCacheLifetime);
+        return candidates;
     }
 
     private async Task<TmdbEpisode?> FindEpisodeAsync(
@@ -268,6 +304,7 @@ public sealed class TmdbClient
         int id,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_episodeCache.TryGetValue(id, out var cached))
         {
             return cached;
@@ -275,23 +312,45 @@ public sealed class TmdbClient
 
         try
         {
-            using var showResponse = await SendGetAsync(
-                $"tv/{id}?api_key={Uri.EscapeDataString(_apiKey)}",
-                cancellationToken);
-            if (showResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+            var showCacheKey = MetadataCacheKey.ResourceById(
+                "tmdb",
+                "series-season-count",
+                id);
+            int seasonCount;
+            if (_diskCache?.TryGet<int>(showCacheKey, out var cachedSeasonCount) == true)
+            {
+                seasonCount = cachedSeasonCount;
+            }
+            else
+            {
+                using var showResponse = await SendGetAsync(
+                    $"tv/{id}?api_key={Uri.EscapeDataString(_apiKey)}",
+                    cancellationToken);
+                if (showResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    _diskCache?.Set(showCacheKey, -1, MetadataCacheLifetime);
+                    _episodeCache[id] = [];
+                    return [];
+                }
+
+                EnsureSuccess(showResponse);
+                using var showStream = await showResponse.Content.ReadAsStreamAsync(cancellationToken);
+                var show = await JsonSerializer.DeserializeAsync<TmdbTvDetail>(
+                    showStream,
+                    cancellationToken: cancellationToken);
+                seasonCount = show?.NumberOfSeasons ?? 0;
+                _diskCache?.Set(showCacheKey, seasonCount, MetadataCacheLifetime);
+            }
+
+            if (seasonCount < 0)
             {
                 _episodeCache[id] = [];
                 return [];
             }
 
-            EnsureSuccess(showResponse);
-            using var showStream = await showResponse.Content.ReadAsStreamAsync(cancellationToken);
-            var show = await JsonSerializer.DeserializeAsync<TmdbTvDetail>(
-                showStream,
-                cancellationToken: cancellationToken);
             var episodes = new List<TmdbEpisode>();
 
-            for (var season = 0; season <= (show?.NumberOfSeasons ?? 0); season++)
+            for (var season = 0; season <= seasonCount; season++)
             {
                 episodes.AddRange(await GetSeasonEpisodesAsync(id, season, cancellationToken));
             }
@@ -317,9 +376,20 @@ public sealed class TmdbClient
         int tmdbId,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_tvdbIdCache.TryGetValue(tmdbId, out var cached))
         {
             return cached;
+        }
+
+        var diskCacheKey = MetadataCacheKey.ResourceById(
+            "tmdb",
+            "tvdb-external-id",
+            tmdbId);
+        if (_diskCache?.TryGet<int?>(diskCacheKey, out var diskCached) == true)
+        {
+            _tvdbIdCache[tmdbId] = diskCached;
+            return diskCached;
         }
 
         try
@@ -330,6 +400,11 @@ public sealed class TmdbClient
             if (!response.IsSuccessStatusCode)
             {
                 _tvdbIdCache[tmdbId] = null;
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    _diskCache?.Set<int?>(diskCacheKey, null, MetadataCacheLifetime);
+                }
+
                 return null;
             }
 
@@ -338,6 +413,7 @@ public sealed class TmdbClient
                 stream,
                 cancellationToken: cancellationToken);
             _tvdbIdCache[tmdbId] = result?.TvdbId;
+            _diskCache?.Set(diskCacheKey, result?.TvdbId, MetadataCacheLifetime);
             return result?.TvdbId;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -355,10 +431,23 @@ public sealed class TmdbClient
         int season,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var cacheKey = (id, season);
         if (_seasonEpisodeCache.TryGetValue(cacheKey, out var cached))
         {
             return cached;
+        }
+
+        var diskCacheKey = MetadataCacheKey.ResourceById(
+            "tmdb",
+            "season-episodes",
+            id,
+            season);
+        if (_diskCache?.TryGet<List<TmdbEpisode>>(diskCacheKey, out var diskCached) == true
+            && diskCached is not null)
+        {
+            _seasonEpisodeCache[cacheKey] = diskCached;
+            return diskCached;
         }
 
         try
@@ -369,6 +458,7 @@ public sealed class TmdbClient
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 _seasonEpisodeCache[cacheKey] = [];
+                _diskCache?.Set(diskCacheKey, new List<TmdbEpisode>(), MetadataCacheLifetime);
                 return [];
             }
             EnsureSuccess(response);
@@ -385,6 +475,7 @@ public sealed class TmdbClient
                     episode.EpisodeNumber))
                 .ToList() ?? [];
             _seasonEpisodeCache[cacheKey] = episodes;
+            _diskCache?.Set(diskCacheKey, episodes, MetadataCacheLifetime);
             return episodes;
         }
         catch (MetadataLookupException)

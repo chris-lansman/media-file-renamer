@@ -16,6 +16,14 @@
     <SolidColorBrush x:Key="ReviewSoftBrush" Color="#FFF1D6"/>
     <SolidColorBrush x:Key="BlockedBrush" Color="#A62D26"/>
     <SolidColorBrush x:Key="BlockedSoftBrush" Color="#FDE8E7"/>
+    <SolidColorBrush x:Key="ControlHoverBrush" Color="#F1F5F9"/>
+    <SolidColorBrush x:Key="ControlPressedBrush" Color="#E4EBF2"/>
+    <SolidColorBrush x:Key="DisabledBackgroundBrush" Color="#F4F6F8"/>
+    <SolidColorBrush x:Key="DisabledBorderBrush" Color="#E2E8F0"/>
+    <SolidColorBrush x:Key="DisabledTextBrush" Color="#9AA8B7"/>
+    <SolidColorBrush x:Key="PrimaryDisabledBrush" Color="#B8D8E7"/>
+    <SolidColorBrush x:Key="PrimaryDisabledTextBrush" Color="#F7FCFF"/>
+    <SolidColorBrush x:Key="GridLineBrush" Color="#E1E8EF"/>
 
     <Style x:Key="KeyboardFocusVisualStyle">
         <Setter Property="Control.Template">
@@ -39,11 +47,11 @@
         </Border>
         <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Border" Property="Background" Value="#F1F5F9"/>
-                <Setter TargetName="Border" Property="BorderBrush" Value="#B8C6D4"/>
+                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ControlHoverBrush}"/>
+                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="Border" Property="Background" Value="#E4EBF2"/>
+                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ControlPressedBrush}"/>
             </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True">
                 <Setter TargetName="Border" Property="BorderBrush"
@@ -51,9 +59,9 @@
                 <Setter TargetName="Border" Property="BorderThickness" Value="2"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="Border" Property="Background" Value="#F4F6F8"/>
-                <Setter TargetName="Border" Property="BorderBrush" Value="#E2E8F0"/>
-                <Setter Property="Foreground" Value="#9AA8B7"/>
+                <Setter TargetName="Border" Property="Background" Value="{DynamicResource DisabledBackgroundBrush}"/>
+                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource DisabledBorderBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
             </Trigger>
             <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
                          Value="True">
@@ -87,9 +95,9 @@
                 <Setter TargetName="Border" Property="BorderThickness" Value="2"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="Border" Property="Background" Value="#B8D8E7"/>
-                <Setter TargetName="Border" Property="BorderBrush" Value="#B8D8E7"/>
-                <Setter Property="Foreground" Value="#F7FCFF"/>
+                <Setter TargetName="Border" Property="Background" Value="{DynamicResource PrimaryDisabledBrush}"/>
+                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource PrimaryDisabledBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource PrimaryDisabledTextBrush}"/>
             </Trigger>
             <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
                          Value="True">
@@ -169,8 +177,8 @@
                             <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="Border" Property="Background" Value="#F4F6F8"/>
-                            <Setter Property="Foreground" Value="#9AA8B7"/>
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource DisabledBackgroundBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
                         </Trigger>
                         <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}"
                                      Value="True">
@@ -238,7 +246,7 @@
             <Setter.Value>
                 <Style TargetType="DataGridColumnHeader">
                     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}"/>
-                    <Setter Property="BorderBrush" Value="#E1E8EF"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource GridLineBrush}"/>
                     <Setter Property="BorderThickness" Value="0,0,0,1"/>
                     <Setter Property="FontSize" Value="12"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>

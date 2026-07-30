@@ -1,6 +1,8 @@
 using MediaFileRenamer.App.Services;
+using Microsoft.Win32;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using WpfSystemColors = System.Windows.SystemColors;
 
@@ -14,6 +16,7 @@ public partial class App : System.Windows.Application
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
         SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -37,7 +40,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        ApplyHighContrastPalette();
+        ApplyColorPalette();
         DiagnosticLog.Current.Information("Application starting.");
         base.OnStartup(e);
     }
@@ -51,6 +54,7 @@ public partial class App : System.Windows.Application
         }
 
         SystemParameters.StaticPropertyChanged -= OnSystemParametersChanged;
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         base.OnExit(e);
     }
 
@@ -58,11 +62,23 @@ public partial class App : System.Windows.Application
     {
         if (e.PropertyName == nameof(SystemParameters.HighContrast))
         {
-            ApplyHighContrastPalette();
+            ApplyColorPalette();
         }
     }
 
-    private void ApplyHighContrastPalette()
+    private void OnUserPreferenceChanged(
+        object sender,
+        UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category is UserPreferenceCategory.Color
+            or UserPreferenceCategory.General
+            or UserPreferenceCategory.VisualStyle)
+        {
+            _ = Dispatcher.BeginInvoke(ApplyColorPalette);
+        }
+    }
+
+    private void ApplyColorPalette()
     {
         string[] paletteKeys =
         [
@@ -82,6 +98,14 @@ public partial class App : System.Windows.Application
             "ReviewSoftBrush",
             "BlockedBrush",
             "BlockedSoftBrush",
+            "ControlHoverBrush",
+            "ControlPressedBrush",
+            "DisabledBackgroundBrush",
+            "DisabledBorderBrush",
+            "DisabledTextBrush",
+            "PrimaryDisabledBrush",
+            "PrimaryDisabledTextBrush",
+            "GridLineBrush",
         ];
 
         foreach (var key in paletteKeys)
@@ -89,11 +113,22 @@ public partial class App : System.Windows.Application
             Resources.Remove(key);
         }
 
-        if (!SystemParameters.HighContrast)
+        if (SystemParameters.HighContrast)
+        {
+            ApplyHighContrastPalette();
+            return;
+        }
+
+        if (IsWindowsLightTheme())
         {
             return;
         }
 
+        ApplyDarkPalette();
+    }
+
+    private void ApplyHighContrastPalette()
+    {
         Resources["AppBackgroundBrush"] = WpfSystemColors.WindowBrush;
         Resources["SurfaceBrush"] = WpfSystemColors.WindowBrush;
         Resources["SurfaceMutedBrush"] = WpfSystemColors.WindowBrush;
@@ -110,6 +145,64 @@ public partial class App : System.Windows.Application
         Resources["ReviewSoftBrush"] = WpfSystemColors.WindowBrush;
         Resources["BlockedBrush"] = WpfSystemColors.HighlightBrush;
         Resources["BlockedSoftBrush"] = WpfSystemColors.WindowBrush;
+        Resources["ControlHoverBrush"] = WpfSystemColors.ControlBrush;
+        Resources["ControlPressedBrush"] = WpfSystemColors.ControlBrush;
+        Resources["DisabledBackgroundBrush"] = WpfSystemColors.ControlBrush;
+        Resources["DisabledBorderBrush"] = WpfSystemColors.GrayTextBrush;
+        Resources["DisabledTextBrush"] = WpfSystemColors.GrayTextBrush;
+        Resources["PrimaryDisabledBrush"] = WpfSystemColors.ControlBrush;
+        Resources["PrimaryDisabledTextBrush"] = WpfSystemColors.GrayTextBrush;
+        Resources["GridLineBrush"] = WpfSystemColors.WindowTextBrush;
+    }
+
+    private void ApplyDarkPalette()
+    {
+        SetBrush("AppBackgroundBrush", "#111827");
+        SetBrush("SurfaceBrush", "#182235");
+        SetBrush("SurfaceMutedBrush", "#233044");
+        SetBrush("TextBrush", "#F3F6FA");
+        SetBrush("MutedTextBrush", "#B7C4D4");
+        SetBrush("BorderBrush", "#3B4A5F");
+        SetBrush("AccentBrush", "#38A3D1");
+        SetBrush("AccentHoverBrush", "#58B5DA");
+        SetBrush("AccentPressedBrush", "#2588B2");
+        SetBrush("AccentSoftBrush", "#17384A");
+        SetBrush("MatchBrush", "#5FD0A0");
+        SetBrush("MatchSoftBrush", "#153A31");
+        SetBrush("ReviewBrush", "#FFC76B");
+        SetBrush("ReviewSoftBrush", "#44331A");
+        SetBrush("BlockedBrush", "#FF8A83");
+        SetBrush("BlockedSoftBrush", "#442322");
+        SetBrush("ControlHoverBrush", "#263449");
+        SetBrush("ControlPressedBrush", "#31435B");
+        SetBrush("DisabledBackgroundBrush", "#202B3B");
+        SetBrush("DisabledBorderBrush", "#344155");
+        SetBrush("DisabledTextBrush", "#7C8B9E");
+        SetBrush("PrimaryDisabledBrush", "#28556A");
+        SetBrush("PrimaryDisabledTextBrush", "#AFC4CE");
+        SetBrush("GridLineBrush", "#3B4A5F");
+    }
+
+    private void SetBrush(string key, string color)
+    {
+        Resources[key] = new SolidColorBrush(
+            (System.Windows.Media.Color)
+            System.Windows.Media.ColorConverter.ConvertFromString(color));
+    }
+
+    internal static bool IsWindowsLightTheme()
+    {
+        try
+        {
+            using var personalization = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return personalization?.GetValue("AppsUseLightTheme") is not int value
+                || value != 0;
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     private static void OnDispatcherUnhandledException(

@@ -531,6 +531,112 @@ public sealed class OperationRecoveryTests
             unavailableService.GetHistory().Single().Status);
     }
 
+    [TestMethod]
+    public void GetOperationDetails_ExposesSelectedJournalFiles()
+    {
+        using var temp = new TempDirectory();
+        var journalDirectory = temp.CreateDirectory("Journals");
+        var source = temp.CreateFile("Source.mkv", "video");
+        var destination = temp.CreateFile("Output/Renamed.mkv", "video");
+        var operationId = WriteJournal(
+            journalDirectory,
+            FileOperation.Copy,
+            OperationJournalStatus.Completed,
+            [
+                Entry(
+                    source,
+                    destination,
+                    5,
+                    OperationJournalEntryStatus.Completed)
+            ]);
+        var service = new OperationJournalService(journalDirectory);
+
+        var details = service.GetOperationDetails(operationId);
+
+        Assert.IsNotNull(details);
+        Assert.AreEqual(operationId, details.Id);
+        Assert.AreEqual(FileOperation.Copy, details.Operation);
+        Assert.AreEqual(OperationJournalStatus.Completed, details.Status);
+        Assert.HasCount(1, details.Files);
+        Assert.AreEqual(source, details.Files[0].SourcePath);
+        Assert.AreEqual(destination, details.Files[0].DestinationPath);
+        Assert.IsNull(service.GetOperationDetails(Guid.NewGuid()));
+    }
+
+    [TestMethod]
+    public void UndoCompleted_UndoesOnlyTheSelectedEligibleJournal()
+    {
+        using var temp = new TempDirectory();
+        var journalDirectory = temp.CreateDirectory("Journals");
+        var sourceOne = temp.CreateFile("SourceOne.mkv", "first");
+        var destinationOne = temp.CreateFile("Output/First.mkv", "first");
+        var selectedId = WriteJournal(
+            journalDirectory,
+            FileOperation.Copy,
+            OperationJournalStatus.Completed,
+            [
+                Entry(
+                    sourceOne,
+                    destinationOne,
+                    5,
+                    OperationJournalEntryStatus.Completed)
+            ]);
+        var sourceTwo = temp.CreateFile("SourceTwo.mkv", "second");
+        var destinationTwo = temp.CreateFile("Output/Second.mkv", "second");
+        WriteJournal(
+            journalDirectory,
+            FileOperation.Copy,
+            OperationJournalStatus.Completed,
+            [
+                Entry(
+                    sourceTwo,
+                    destinationTwo,
+                    6,
+                    OperationJournalEntryStatus.Completed)
+            ]);
+        var service = new OperationJournalService(journalDirectory);
+
+        var result = service.UndoCompleted(selectedId);
+
+        Assert.IsTrue(result.Success, result.Message);
+        Assert.IsTrue(File.Exists(sourceOne));
+        Assert.IsFalse(File.Exists(destinationOne));
+        Assert.IsTrue(File.Exists(sourceTwo));
+        Assert.IsTrue(File.Exists(destinationTwo));
+        Assert.AreEqual(
+            OperationJournalStatus.Undone,
+            service.GetHistory().Single(item => item.Id == selectedId).Status);
+    }
+
+    [TestMethod]
+    public void UndoCompleted_RejectsUnknownOrIneligibleJournal()
+    {
+        using var temp = new TempDirectory();
+        var journalDirectory = temp.CreateDirectory("Journals");
+        var source = temp.CreateFile("Source.mkv", "video");
+        var operationId = WriteJournal(
+            journalDirectory,
+            FileOperation.Copy,
+            OperationJournalStatus.Resolved,
+            [
+                Entry(
+                    source,
+                    Path.Combine(temp.Path, "Output", "Renamed.mkv"),
+                    5,
+                    OperationJournalEntryStatus.Completed)
+            ]);
+        var service = new OperationJournalService(journalDirectory);
+
+        var ineligible = service.UndoCompleted(operationId);
+        var unknown = service.UndoCompleted(Guid.NewGuid());
+
+        Assert.IsFalse(ineligible.Success);
+        StringAssert.Contains(ineligible.Message, "not available to undo");
+        Assert.IsFalse(unknown.Success);
+        StringAssert.Contains(unknown.Message, "no longer available");
+        Assert.IsTrue(File.Exists(source));
+    }
+
     private static object Entry(
         string sourcePath,
         string destinationPath,

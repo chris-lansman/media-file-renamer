@@ -13,7 +13,7 @@ public sealed partial class MediaScanner
     };
     private static readonly HashSet<string> CompanionExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".srt", ".ass", ".ssa", ".sub", ".idx", ".vtt", ".nfo", ".xml",
+        ".srt", ".ass", ".ssa", ".sub", ".idx", ".sup", ".vtt", ".nfo", ".xml",
         ".jpg", ".jpeg", ".png", ".webp"
     };
     private static readonly HashSet<string> ExtraFolderNames = new(StringComparer.OrdinalIgnoreCase)
@@ -404,7 +404,7 @@ public sealed partial class MediaScanner
     [GeneratedRegex(@"\b(?<year>19\d{2}|20\d{2})\b")]
     private static partial Regex YearPattern();
 
-    [GeneratedRegex(@"\b(480p|720p|1080p|2160p|4k\d{2,3}|4k|uhd|web[- ]?dl|webrip|bluray|brrip|dvdrip|hdrip|x26[45]?|h26[45]|hevc|aac|dts|truehd|atmos|proper|repack|no[- ]?dnr|\d{2}mm)\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(480p|720p|1080p|2160p|4k\d{2,3}|4k|uhd|web[- ]?dl|webrip|bluray|brrip|dvdrip|hdrip|remux|hdr10|hdr|dolby[- ]?vision|dovi|dv|av1|10bit|8bit|x26[45]?|h26[45]|hevc|aac|dts|truehd|atmos|proper|repack|no[- ]?dnr|\d{2}mm)\b", RegexOptions.IgnoreCase)]
     private static partial Regex ReleaseNoisePattern();
 
     [GeneratedRegex(@"^\s*\d{1,3}\s*[- .]+\s*", RegexOptions.IgnoreCase)]

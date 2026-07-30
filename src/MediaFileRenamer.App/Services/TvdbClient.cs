@@ -8,17 +8,25 @@ namespace MediaFileRenamer.App.Services;
 
 public sealed class TvdbClient
 {
+    private static readonly TimeSpan SearchCacheLifetime = TimeSpan.FromDays(1);
+    private static readonly TimeSpan EpisodeCacheLifetime = TimeSpan.FromDays(14);
     private readonly string _apiKey;
     private readonly string _pin;
     private readonly HttpClient _httpClient;
+    private readonly MetadataDiskCache? _diskCache;
     private readonly Dictionary<string, TvdbEpisodeMatch?> _episodeCache = [];
     private string? _token;
 
-    public TvdbClient(string apiKey, string? pin = null, HttpClient? httpClient = null)
+    public TvdbClient(
+        string apiKey,
+        string? pin = null,
+        HttpClient? httpClient = null,
+        MetadataDiskCache? metadataCache = null)
     {
         _apiKey = apiKey;
         _pin = pin?.Trim() ?? "";
         _httpClient = httpClient ?? new HttpClient();
+        _diskCache = metadataCache ?? (httpClient is null ? MetadataDiskCache.Shared : null);
         _httpClient.BaseAddress ??= new Uri("https://api4.thetvdb.com/v4/");
         _httpClient.Timeout = TimeSpan.FromSeconds(30);
     }
@@ -36,6 +44,19 @@ public sealed class TvdbClient
         string query,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        var cacheKey = MetadataCacheKey.Search("tvdb", "tv", query);
+        if (_diskCache?.TryGet<List<TvdbSeriesCandidate>>(cacheKey, out var cached) == true
+            && cached is not null)
+        {
+            return cached;
+        }
+
         try
         {
             if (!await EnsureAuthenticatedAsync(cancellationToken))
@@ -57,7 +78,7 @@ public sealed class TvdbClient
             var result = await JsonSerializer.DeserializeAsync<TvdbSearchResponse>(
                 stream,
                 cancellationToken: cancellationToken);
-            return result?.Data?
+            var candidates = result?.Data?
                 .Where(item => item.TvdbId is not null && !string.IsNullOrWhiteSpace(item.Name))
                 .Select(item => new TvdbSeriesCandidate(
                     item.TvdbId!.Value,
@@ -69,6 +90,8 @@ public sealed class TvdbClient
                 .DistinctBy(candidate => candidate.TvdbId)
                 .Take(8)
                 .ToList() ?? [];
+            _diskCache?.Set(cacheKey, candidates, SearchCacheLifetime);
+            return candidates;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -103,6 +126,7 @@ public sealed class TvdbClient
         DateOnly? airDate = null,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (episode is null && airDate is null)
         {
             return null;
@@ -113,6 +137,19 @@ public sealed class TvdbClient
         if (_episodeCache.TryGetValue(cacheKey, out var cached))
         {
             return cached;
+        }
+
+        var diskCacheKey = MetadataCacheKey.Episode(
+            "tvdb",
+            seriesId,
+            order,
+            season,
+            episode,
+            airDate);
+        if (_diskCache?.TryGet<TvdbEpisodeMatch?>(diskCacheKey, out var diskCached) == true)
+        {
+            _episodeCache[cacheKey] = diskCached;
+            return diskCached;
         }
 
         try
@@ -166,6 +203,7 @@ public sealed class TvdbClient
 
             var match = matches.Count == 1 ? matches[0] : null;
             _episodeCache[cacheKey] = match;
+            _diskCache?.Set(diskCacheKey, match, EpisodeCacheLifetime);
             return match;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
