@@ -61,7 +61,7 @@
                                     Click="CheckForUpdates_Click"
                                     automation:AutomationProperties.Name="Check for updates"/>
                             <Button x:Name="OpenReleaseButton" Content="_Open release page"
-                                    Margin="8,0,0,0" IsEnabled="False"
+                                    Margin="8,0,0,0"
                                     Click="OpenRelease_Click"
                                     automation:AutomationProperties.Name="Open latest release download page"/>
                         </StackPanel>
