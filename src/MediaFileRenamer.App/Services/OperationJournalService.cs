@@ -90,6 +90,30 @@ public sealed class OperationJournalService
             .ToList();
     }
 
+    public OperationJournalDetails? GetOperationDetails(Guid operationId)
+    {
+        var candidate = FindById(operationId);
+        if (candidate is null)
+        {
+            return null;
+        }
+
+        var journal = candidate.Value.Journal;
+        return new OperationJournalDetails(
+            journal.Id,
+            journal.CreatedAt,
+            journal.CompletedAt,
+            journal.Operation,
+            journal.Status,
+            journal.Error ?? "",
+            journal.Entries.Select(entry => new OperationJournalFileDetails(
+                entry.SourcePath,
+                entry.DestinationPath,
+                entry.IsCompanion,
+                entry.Length,
+                entry.Status)).ToList());
+    }
+
     public IReadOnlyList<InterruptedOperationRecovery> GetInterruptedOperations()
     {
         return FindInterruptedJournals()
@@ -237,7 +261,33 @@ public sealed class OperationJournalService
             return new UndoResult(false, 0, "No completed operation is available to undo.");
         }
 
-        var (path, journal) = candidate.Value;
+        return UndoCandidate(candidate.Value);
+    }
+
+    public UndoResult UndoCompleted(Guid operationId)
+    {
+        var candidate = FindById(operationId);
+        if (candidate is null)
+        {
+            return new UndoResult(false, 0, "The selected operation is no longer available.");
+        }
+
+        if (candidate.Value.Journal.Status is not (
+            OperationJournalStatus.Completed
+                or OperationJournalStatus.UndoFailed))
+        {
+            return new UndoResult(
+                false,
+                0,
+                "The selected operation is not available to undo.");
+        }
+
+        return UndoCandidate(candidate.Value);
+    }
+
+    private UndoResult UndoCandidate((string Path, OperationJournal Journal) candidate)
+    {
+        var (path, journal) = candidate;
         foreach (var entry in journal.Entries.AsEnumerable().Reverse())
         {
             if (entry.Status != OperationJournalEntryStatus.Completed)
@@ -406,6 +456,28 @@ public sealed class OperationJournalService
             var journal = TryLoad(path);
             if (journal?.Status is OperationJournalStatus.Completed
                 or OperationJournalStatus.UndoFailed)
+            {
+                return (path, journal);
+            }
+        }
+
+        return null;
+    }
+
+    private (string Path, OperationJournal Journal)? FindById(Guid operationId)
+    {
+        if (!Directory.Exists(JournalDirectory))
+        {
+            return null;
+        }
+
+        foreach (var path in Directory.EnumerateFiles(
+                     JournalDirectory,
+                     "*.json",
+                     SearchOption.TopDirectoryOnly))
+        {
+            var journal = TryLoad(path);
+            if (journal?.Id == operationId)
             {
                 return (path, journal);
             }
@@ -1047,6 +1119,22 @@ public sealed record OperationJournalSummary(
     OperationJournalStatus Status,
     int FileCount,
     string Error);
+
+public sealed record OperationJournalDetails(
+    Guid Id,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? CompletedAt,
+    FileOperation Operation,
+    OperationJournalStatus Status,
+    string Error,
+    IReadOnlyList<OperationJournalFileDetails> Files);
+
+public sealed record OperationJournalFileDetails(
+    string SourcePath,
+    string DestinationPath,
+    bool IsCompanion,
+    long Length,
+    OperationJournalEntryStatus Status);
 
 public sealed record UndoResult(bool Success, int RestoredFiles, string Message);
 

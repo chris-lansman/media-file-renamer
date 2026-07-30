@@ -13,7 +13,7 @@
                   HorizontalScrollBarVisibility="Auto"
                   CanContentScroll="False"
                   automation:AutomationProperties.Name="Metadata match picker">
-    <Border MinWidth="808" MinHeight="544"
+    <Border x:Name="PickerContentBorder" MinWidth="808" MinHeight="544"
             Width="{Binding ViewportWidth, ElementName=MatchPickerScrollViewer}"
             Height="{Binding ViewportHeight, ElementName=MatchPickerScrollViewer}"
             Padding="24,22">
@@ -26,11 +26,13 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Choose the correct match" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+            <TextBlock x:Name="PickerHeadingTextBlock" Text="Choose the correct match"
+                       FontSize="26" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextBrush}"/>
             <TextBlock x:Name="SourceTextBlock" Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
-        <Grid Grid.Row="1" Margin="0,0,0,12">
+        <Grid Grid.Row="1" x:Name="OnlineSearchPanel" Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -44,7 +46,7 @@
                     automation:AutomationProperties.Name="Search metadata providers"/>
         </Grid>
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="2" x:Name="ProviderResultsGrid">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
@@ -144,10 +146,38 @@
             </Border>
         </Grid>
 
+        <Border Grid.Row="1" Grid.RowSpan="2" x:Name="LocalClassificationPanel"
+                Visibility="Collapsed"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1" CornerRadius="8" Padding="24">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="560">
+                <TextBlock Text="Choose how this file should be organized"
+                           FontSize="20" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           TextAlignment="Center" TextWrapping="Wrap"/>
+                <TextBlock Text="Online matching is not configured. Classify the file locally now, or add provider credentials later in Settings."
+                           Foreground="{DynamicResource MutedTextBrush}"
+                           TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,18"/>
+                <WrapPanel HorizontalAlignment="Center">
+                    <Button x:Name="LocalMovieButton" Content="Use as Movie" MinWidth="126"
+                            Margin="0,0,10,0" Click="UseAsMovie_Click"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            automation:AutomationProperties.Name="Classify locally as movie"/>
+                    <Button x:Name="LocalTvButton" Content="Use as TV Episode" MinWidth="142"
+                            Click="UseAsTv_Click"
+                            automation:AutomationProperties.Name="Classify locally as television"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
         <DockPanel Grid.Row="3" Margin="0,16,0,0">
-            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                <Button Content="Use as Movie" MinWidth="116" Margin="0,0,8,0" Click="UseAsMovie_Click"/>
-                <Button Content="Use as TV" MinWidth="104" Click="UseAsTv_Click"/>
+            <StackPanel x:Name="OnlineLocalChoicePanel" DockPanel.Dock="Left" Orientation="Horizontal">
+                <Button Content="Use as Movie" MinWidth="116" Margin="0,0,8,0"
+                        Click="UseAsMovie_Click"
+                        automation:AutomationProperties.Name="Classify locally as movie"/>
+                <Button Content="Use as TV" MinWidth="104" Click="UseAsTv_Click"
+                        automation:AutomationProperties.Name="Classify locally as television"/>
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button x:Name="CancelButton" Content="_Cancel" MinWidth="92"
@@ -159,7 +189,7 @@
                         Click="UseSelected_Click"
                         automation:AutomationProperties.Name="Use selected metadata match"/>
             </StackPanel>
-            <TextBlock Text="Double-click a result to choose it." VerticalAlignment="Center"
+            <TextBlock x:Name="OnlineSelectionHint" Text="Double-click a result to choose it." VerticalAlignment="Center"
                        TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}"/>
         </DockPanel>
     </Grid>

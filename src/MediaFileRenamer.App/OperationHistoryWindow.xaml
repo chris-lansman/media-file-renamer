@@ -1,7 +1,7 @@
 <Window x:Class="MediaFileRenamer.App.OperationHistoryWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Operation History" Height="520" Width="820"
+        Title="Operation History" Height="650" Width="900"
         MinHeight="340" MinWidth="520" WindowStartupLocation="CenterOwner">
     <Window.Resources>
         <ResourceDictionary>
@@ -19,6 +19,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="2*"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -32,6 +33,7 @@
 
         <DataGrid Grid.Row="1" x:Name="HistoryGrid" ItemsSource="{Binding History}"
                   AutoGenerateColumns="False" IsReadOnly="True"
+                  SelectionMode="Single" SelectionChanged="HistoryGrid_SelectionChanged"
                   AutomationProperties.Name="Operation history">
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow"
@@ -58,7 +60,18 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <Grid Grid.Row="2" Margin="0,16,0,0">
+        <GroupBox Grid.Row="2" Header="Selected operation" Margin="0,14,0,0">
+            <TextBox x:Name="OperationDetailsTextBox"
+                     IsReadOnly="True" IsTabStop="True"
+                     TextWrapping="NoWrap"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Auto"
+                     MinHeight="92"
+                     AutomationProperties.Name="Selected operation details"
+                     AutomationProperties.LiveSetting="Polite"/>
+        </GroupBox>
+
+        <Grid Grid.Row="3" Margin="0,16,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -69,8 +82,18 @@
                        AutomationProperties.Name="Operation history status"
                        AutomationProperties.LiveSetting="Polite"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <Button Content="Undo Last Completed" MinWidth="156" Margin="0,0,8,0"
-                        Click="Undo_Click" AutomationProperties.Name="Undo last completed operation"/>
+                <Button x:Name="OpenDestinationButton" Content="_Open Destination"
+                        MinWidth="138" Margin="0,0,8,0" IsEnabled="False"
+                        Click="OpenDestination_Click"
+                        AutomationProperties.Name="Open selected operation destination"/>
+                <Button x:Name="CopyDetailsButton" Content="_Copy Details"
+                        MinWidth="112" Margin="0,0,8,0" IsEnabled="False"
+                        Click="CopyDetails_Click"
+                        AutomationProperties.Name="Copy selected operation details"/>
+                <Button x:Name="UndoButton" Content="_Undo Selected"
+                        MinWidth="128" Margin="0,0,8,0" IsEnabled="False"
+                        Click="Undo_Click"
+                        AutomationProperties.Name="Undo selected completed operation"/>
                 <Button x:Name="CloseButton" Content="_Close" MinWidth="92"
                         IsCancel="True"
                         Click="Close_Click" AutomationProperties.Name="Close operation history"/>

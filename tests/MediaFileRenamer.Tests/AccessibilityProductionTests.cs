@@ -4,6 +4,7 @@ using MediaFileRenamer.App.ViewModels;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Xml.Linq;
 
 namespace MediaFileRenamer.Tests;
@@ -35,6 +36,9 @@ public sealed class AccessibilityProductionTests
         AssertLiveRegion(window, "ReviewCountTextBlock", "Review status");
         Assert.IsNotNull(
             ((Button)window.FindName("AddFilesButton")).FocusVisualStyle);
+        Assert.AreEqual(
+            KeyboardNavigationMode.Cycle,
+            KeyboardNavigation.GetTabNavigation(window));
         Assert.AreEqual(
             "Original media files",
             AutomationProperties.GetName(
@@ -119,7 +123,7 @@ public sealed class AccessibilityProductionTests
         Assert.IsGreaterThan(
             Grid.GetRow(settingsPath),
             stagingGrid.RowDefinitions.Count);
-        Assert.AreEqual(2, Grid.GetRow(settingsPath));
+        Assert.AreEqual(3, Grid.GetRow(settingsPath));
 
         window.Close();
     }

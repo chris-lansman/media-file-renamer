@@ -41,10 +41,28 @@ public partial class MatchPickerWindow : Window
         UpdateCandidateState();
         if (_client is null)
         {
+            ConfigureLocalClassificationMode();
             SearchTextBox.IsEnabled = false;
             SearchButton.IsEnabled = false;
             SearchStatusTextBlock.Text = "TMDB search is unavailable. Choose Use as Movie or Use as TV to classify this file locally.";
         }
+    }
+
+    private void ConfigureLocalClassificationMode()
+    {
+        Title = "Classify Media";
+        PickerHeadingTextBlock.Text = "Classify this media file";
+        Width = 760;
+        Height = 480;
+        PickerContentBorder.MinWidth = 640;
+        PickerContentBorder.MinHeight = 410;
+        OnlineSearchPanel.Visibility = Visibility.Collapsed;
+        ProviderResultsGrid.Visibility = Visibility.Collapsed;
+        OnlineLocalChoicePanel.Visibility = Visibility.Collapsed;
+        OnlineSelectionHint.Visibility = Visibility.Collapsed;
+        UseSelectedButton.Visibility = Visibility.Collapsed;
+        LocalClassificationPanel.Visibility = Visibility.Visible;
+        LocalMovieButton.IsDefault = true;
     }
 
     private void UseSelected_Click(object sender, RoutedEventArgs e)
