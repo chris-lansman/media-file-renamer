@@ -119,7 +119,7 @@ public sealed class AccessibilityProductionTests
         Assert.IsGreaterThan(
             Grid.GetRow(settingsPath),
             stagingGrid.RowDefinitions.Count);
-        Assert.AreEqual(2, Grid.GetRow(settingsPath));
+        Assert.AreEqual(3, Grid.GetRow(settingsPath));
 
         window.Close();
     }
