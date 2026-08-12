@@ -183,6 +183,7 @@ public partial class MainWindow : Window
         }
 
         StatusTextBlock.Text = FormatMatchSummary(PreviewItems);
+        FocusFirstUnresolved();
     }
 
     private async void MatchSelected_Click(object sender, RoutedEventArgs e)
@@ -279,6 +280,162 @@ public partial class MainWindow : Window
 
         UpdateDestination(item);
         StatusTextBlock.Text = $"Match result: {item.Status}.";
+    }
+
+    private async void ResolveReview_Click(object sender, RoutedEventArgs e)
+    {
+        await RunBusyAsync(ResolveSelectedReviewAsync);
+    }
+
+    private async Task ResolveSelectedReviewAsync()
+    {
+        if (OriginalGrid.SelectedItem is not MediaPreviewItem item)
+        {
+            return;
+        }
+
+        var key = _settings.TmdbApiKey.Trim();
+        if (item.MediaType != "TV"
+            || string.IsNullOrWhiteSpace(key)
+            || (item.TmdbId is null && item.TvdbId is null))
+        {
+            await ChooseSelectedAsync();
+            return;
+        }
+
+        StatusTextBlock.Text = $"Loading episodes for {item.MatchedTitle}...";
+        var client = new TmdbClient(key);
+        var tmdbId = item.TmdbId;
+        if (tmdbId is null && item.TvdbId is not null)
+        {
+            var show = await client.FindTvByTvdbIdAsync(
+                item.TvdbId.Value,
+                _operationCancellation?.Token ?? CancellationToken.None);
+            tmdbId = show?.TmdbId;
+            item.TmdbId = tmdbId;
+        }
+
+        if (tmdbId is null)
+        {
+            StatusTextBlock.Text =
+                "This show has no TMDB identity for episode browsing. "
+                + "Edit and confirm the episode details, or choose a different show.";
+            return;
+        }
+
+        var choices = await client.GetEpisodeChoicesAsync(
+            tmdbId.Value,
+            _operationCancellation?.Token ?? CancellationToken.None);
+        if (choices.Count == 0)
+        {
+            StatusTextBlock.Text =
+                "No episodes were returned for this show. "
+                + "Edit and confirm the episode details, or choose a different show.";
+            return;
+        }
+
+        var picker = new EpisodePickerWindow(item, choices)
+        {
+            Owner = this
+        };
+        if (picker.ShowDialog() != true || picker.SelectedChoice is null)
+        {
+            StatusTextBlock.Text = "Episode selection canceled; no details were changed.";
+            return;
+        }
+
+        var selected = picker.SelectedChoice;
+        item.Season = selected.Season;
+        item.Episode = selected.Episode;
+        item.EpisodeTitle = selected.Title;
+        item.Status = "Manual TMDB episode choice";
+        UpdateDestination(item);
+        StatusTextBlock.Text =
+            $"Resolved {item.SourceFileName} as {selected.DisplayLabel}.";
+        FocusFirstUnresolved();
+    }
+
+    private void ConfirmManualDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (OriginalGrid.SelectedItem is not MediaPreviewItem item)
+        {
+            return;
+        }
+
+        if (!TryConfirmManualDetails(item, out var validationMessage))
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                validationMessage,
+                "Complete the media details",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        UpdateDestination(item);
+        StatusTextBlock.Text = $"Confirmed the edited details for {item.SourceFileName}.";
+        UpdateActionState();
+        FocusFirstUnresolved();
+    }
+
+    internal static bool TryConfirmManualDetails(
+        MediaPreviewItem item,
+        out string validationMessage)
+    {
+        if (string.IsNullOrWhiteSpace(item.MatchedTitle))
+        {
+            validationMessage = "Enter a title before confirming this file.";
+            return false;
+        }
+
+        if (item.MediaType == "TV")
+        {
+            if (item.Season is null || item.Season < 0)
+            {
+                validationMessage = "Enter a season number of 0 or greater.";
+                return false;
+            }
+
+            if (item.Episode is null || item.Episode <= 0)
+            {
+                validationMessage = "Enter an episode number greater than 0.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(item.EpisodeTitle))
+            {
+                validationMessage = "Enter an episode title before confirming this TV episode.";
+                return false;
+            }
+
+            item.Status = "Manual TV details confirmed";
+            validationMessage = "";
+            return true;
+        }
+
+        if (item.MediaType == "Movie")
+        {
+            item.Status = "Manual movie details confirmed";
+            validationMessage = "";
+            return true;
+        }
+
+        validationMessage = "Choose Movie or TV in the Type field before confirming.";
+        return false;
+    }
+
+    private bool FocusFirstUnresolved()
+    {
+        var unresolved = PreviewItems.FirstOrDefault(item => item.RequiresReview);
+        if (unresolved is null)
+        {
+            return false;
+        }
+
+        OriginalGrid.SelectedItem = unresolved;
+        OriginalGrid.ScrollIntoView(unresolved);
+        return true;
     }
 
     private async void ApplyRename_Click(object sender, RoutedEventArgs e)
@@ -438,6 +595,7 @@ public partial class MainWindow : Window
         ChooseSelectedButton.IsEnabled = enabled;
         RetryUnresolvedButton.IsEnabled = enabled;
         RenameButton.IsEnabled = enabled;
+        ReviewGuidancePanel.IsEnabled = enabled;
     }
 
     private void UpdateActionState()
@@ -456,7 +614,9 @@ public partial class MainWindow : Window
             || EmptyDropPanel is null
             || SelectedFileEditor is null
             || RememberShowMappingButton is null
-            || RememberShowMappingStatusTextBlock is null)
+            || RememberShowMappingStatusTextBlock is null
+            || ReviewGuidancePanel is null
+            || ResolveReviewButton is null)
         {
             return;
         }
@@ -480,6 +640,14 @@ public partial class MainWindow : Window
             : null;
         EmptyDropPanel.Visibility = hasItems ? Visibility.Collapsed : Visibility.Visible;
         SelectedFileEditor.Visibility = hasSelection ? Visibility.Visible : Visibility.Collapsed;
+        ReviewGuidancePanel.IsEnabled = true;
+        var canBrowseEpisodes = selectedItem?.MediaType == "TV"
+            && (selectedItem.TmdbId is not null || selectedItem.TvdbId is not null)
+            && _settings.UseTmdbLookup
+            && !string.IsNullOrWhiteSpace(_settings.TmdbApiKey);
+        ResolveReviewButton.Content = canBrowseEpisodes
+            ? "Browse Episodes..."
+            : "Choose Show...";
         UpdateRememberedShowMappingState(selectedItem);
 
         var operation = OperationComboBox?.SelectedIndex == 1 ? "Copy" : "Move";
@@ -802,7 +970,7 @@ public partial class MainWindow : Window
         {
             OriginalGrid.SelectedItem = item;
             OriginalGrid.ScrollIntoView(item);
-            await RunBusyAsync(ChooseSelectedAsync);
+            await RunBusyAsync(ResolveSelectedReviewAsync);
         }
     }
 

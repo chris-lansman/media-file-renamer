@@ -42,7 +42,13 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     public string MatchedTitle
     {
         get => _matchedTitle;
-        set => SetField(ref _matchedTitle, value);
+        set
+        {
+            if (SetField(ref _matchedTitle, value))
+            {
+                NotifyReviewStateChanged();
+            }
+        }
     }
 
     public int? Year
@@ -90,19 +96,37 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     public int? TmdbId
     {
         get => _tmdbId;
-        set => SetField(ref _tmdbId, value);
+        set
+        {
+            if (SetField(ref _tmdbId, value))
+            {
+                NotifyReviewStateChanged();
+            }
+        }
     }
 
     public int? TvdbId
     {
         get => _tvdbId;
-        set => SetField(ref _tvdbId, value);
+        set
+        {
+            if (SetField(ref _tvdbId, value))
+            {
+                NotifyReviewStateChanged();
+            }
+        }
     }
 
     public string EpisodeTitle
     {
         get => _episodeTitle;
-        set => SetField(ref _episodeTitle, value);
+        set
+        {
+            if (SetField(ref _episodeTitle, value))
+            {
+                NotifyReviewStateChanged();
+            }
+        }
     }
     public string DestinationPath
     {
@@ -182,6 +206,84 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
 
     public bool RequiresReview => MatchState is "Review needed" or "Ready to match" or "Blocked";
 
+    public string ReviewReason
+    {
+        get
+        {
+            if (!RequiresReview)
+            {
+                return "This file is ready.";
+            }
+
+            if (MatchState == "Blocked")
+            {
+                return Status;
+            }
+
+            if (MediaType == "Unknown")
+            {
+                return "The app could not confidently determine whether this is a movie or TV episode.";
+            }
+
+            if (MediaType == "TV" && Season is null)
+            {
+                return TmdbId is not null || TvdbId is not null
+                    ? "The show was identified, but the season could not be determined."
+                    : "A season number could not be determined from the file or folder name.";
+            }
+
+            if (MediaType == "TV" && Episode is null)
+            {
+                return "The show was identified, but the episode number could not be determined.";
+            }
+
+            if (MediaType == "TV" && string.IsNullOrWhiteSpace(EpisodeTitle))
+            {
+                return "The season and episode are known, but the episode title could not be verified.";
+            }
+
+            return string.IsNullOrWhiteSpace(Status)
+                ? "This file still needs a decision before the batch can be applied."
+                : Status;
+        }
+    }
+
+    public string ReviewSuggestion
+    {
+        get
+        {
+            if (!RequiresReview)
+            {
+                return "No action is required.";
+            }
+
+            if (MediaType == "TV" && (TmdbId is not null || TvdbId is not null))
+            {
+                return "Browse the matched show's episodes, or edit the Selected file fields below and confirm your details.";
+            }
+
+            if (MediaType == "TV")
+            {
+                return "Choose the correct show first, or edit the Selected file fields below and confirm your details.";
+            }
+
+            if (MediaType == "Unknown")
+            {
+                return "Choose a metadata match, or set the type and complete the Selected file fields below manually.";
+            }
+
+            return "Choose a different match, or confirm the edited details in Selected file below.";
+        }
+    }
+
+    public bool CanConfirmManualDetails =>
+        !string.IsNullOrWhiteSpace(MatchedTitle)
+        && (MediaType == "Movie"
+            || (MediaType == "TV"
+                && Season is >= 0
+                && Episode is > 0
+                && !string.IsNullOrWhiteSpace(EpisodeTitle)));
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void NotifyReviewStateChanged()
@@ -189,6 +291,9 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MatchState)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MatchLabel)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RequiresReview)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReviewReason)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReviewSuggestion)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanConfirmManualDetails)));
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
