@@ -232,7 +232,8 @@
                                     Click="ResolveReview_Click"
                                     Style="{StaticResource PrimaryButtonStyle}"
                                     AutomationProperties.Name="Resolve the selected review"/>
-                            <Button Content="Choose Different Show..."
+                            <Button x:Name="ChooseDifferentShowButton"
+                                    Content="Choose Different Show..."
                                     Click="ChooseSelected_Click"
                                     AutomationProperties.Name="Choose a different movie or show"/>
                         </WrapPanel>

@@ -616,7 +616,8 @@ public partial class MainWindow : Window
             || RememberShowMappingButton is null
             || RememberShowMappingStatusTextBlock is null
             || ReviewGuidancePanel is null
-            || ResolveReviewButton is null)
+            || ResolveReviewButton is null
+            || ChooseDifferentShowButton is null)
         {
             return;
         }
@@ -647,7 +648,11 @@ public partial class MainWindow : Window
             && !string.IsNullOrWhiteSpace(_settings.TmdbApiKey);
         ResolveReviewButton.Content = canBrowseEpisodes
             ? "Browse Episodes..."
-            : "Choose Show...";
+            : "Choose Match...";
+        ChooseDifferentShowButton.Visibility = selectedItem is not null
+            && (selectedItem.TmdbId is not null || selectedItem.TvdbId is not null)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         UpdateRememberedShowMappingState(selectedItem);
 
         var operation = OperationComboBox?.SelectedIndex == 1 ? "Copy" : "Move";
