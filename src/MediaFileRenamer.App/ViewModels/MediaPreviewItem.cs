@@ -220,6 +220,11 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
                 return Status;
             }
 
+            if (MatchState == "Ready to match")
+            {
+                return "The filename was parsed, but this item has not been matched or manually confirmed yet.";
+            }
+
             if (MediaType == "Unknown")
             {
                 return "The app could not confidently determine whether this is a movie or TV episode.";
@@ -255,6 +260,11 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
             if (!RequiresReview)
             {
                 return "No action is required.";
+            }
+
+            if (MatchState == "Ready to match")
+            {
+                return "Choose a metadata match, retry matching, or confirm the Selected file details below.";
             }
 
             if (MediaType == "TV" && (TmdbId is not null || TvdbId is not null))
