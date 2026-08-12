@@ -224,6 +224,42 @@ public sealed class MediaScannerTests
     }
 
     [TestMethod]
+    public void Scan_InfersMissingSeasonFromUnambiguousSiblingEpisodes()
+    {
+        using var temp = new TempDirectory();
+        var folder = temp.CreateDirectory(
+            "Scooby Doo, Where Are You! (TV Series 1969-1970)");
+        temp.CreateFile(Path.Combine(
+            folder,
+            "Scooby-Doo, Where Are You! - S03E15 - The Warlock of Wimbledon.mkv"));
+        temp.CreateFile(Path.Combine(
+            folder,
+            "Episode 16 The Beast Is Awake in Bottomless Lake.mkv"));
+
+        var items = new MediaScanner().Scan([folder]);
+        var inferred = items.Single(item => item.Episode == 16);
+
+        Assert.AreEqual(3, inferred.Season);
+        Assert.Contains("inferred season 3", inferred.Status);
+    }
+
+    [TestMethod]
+    public void Scan_DoesNotInferSeasonWhenSiblingEvidenceConflicts()
+    {
+        using var temp = new TempDirectory();
+        var folder = temp.CreateDirectory(
+            "Scooby Doo, Where Are You! (TV Series 1969-1970)");
+        temp.CreateFile(Path.Combine(folder, "Scooby-Doo - S01E01.mkv"));
+        temp.CreateFile(Path.Combine(folder, "Scooby-Doo - S03E15.mkv"));
+        temp.CreateFile(Path.Combine(folder, "Episode 16 The Beast Is Awake.mkv"));
+
+        var items = new MediaScanner().Scan([folder]);
+        var ambiguous = items.Single(item => item.Episode == 16);
+
+        Assert.IsNull(ambiguous.Season);
+    }
+
+    [TestMethod]
     public void Scan_UsesExplicitTvFolderForTitleOnlyEpisode()
     {
         using var temp = new TempDirectory();

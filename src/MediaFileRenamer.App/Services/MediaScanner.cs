@@ -38,8 +38,10 @@ public sealed partial class MediaScanner
 
         foreach (var group in items.GroupBy(item => item.SourceGroupPath, StringComparer.OrdinalIgnoreCase))
         {
-            var count = group.Count();
-            foreach (var item in group)
+            var groupedItems = group.ToList();
+            var count = groupedItems.Count;
+            InferMissingSeasonFromSiblings(groupedItems);
+            foreach (var item in groupedItems)
             {
                 item.GroupFileCount = count;
                 if (item.MediaType == "Unknown" && count >= 3)
@@ -50,6 +52,30 @@ public sealed partial class MediaScanner
         }
 
         return items;
+    }
+
+    internal static void InferMissingSeasonFromSiblings(
+        IReadOnlyList<MediaPreviewItem> items)
+    {
+        var explicitSeasons = items
+            .Where(item => item.MediaType == "TV" && item.Season is not null)
+            .Select(item => item.Season!.Value)
+            .Distinct()
+            .ToList();
+        if (explicitSeasons.Count != 1)
+        {
+            return;
+        }
+
+        var season = explicitSeasons[0];
+        foreach (var item in items.Where(item =>
+                     item.MediaType == "TV"
+                     && item.Season is null
+                     && item.Episode is not null))
+        {
+            item.Season = season;
+            item.Status = $"Parsed TV episode; inferred season {season} from sibling files";
+        }
     }
 
     private static IEnumerable<ScannedFile> ExpandPath(string path)
