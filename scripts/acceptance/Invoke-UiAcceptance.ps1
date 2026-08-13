@@ -1309,6 +1309,15 @@ try {
     Open-SyntheticFixture `
         -MainWindow $main `
         -FixturePath $fixturePath
+    $reviewGuidance = Find-UiaElement `
+        -Root $main `
+        -AutomationId "ResolveReviewButton"
+    Add-Check `
+        -Id "review-needed.guidance" `
+        -Passed ($null -ne $reviewGuidance -and -not $reviewGuidance.Current.IsOffscreen) `
+        -Message "A selected unresolved file exposes visible explanation and resolution actions." `
+        -Evidence @{ automationId = "ResolveReviewButton" }
+    Audit-Capture-Traverse -Window $main -Slug "review-needed"
     $picker = Open-ManualChoiceForFirstRow -MainWindow $main
     Audit-Capture-Traverse -Window $picker -Slug "local-classification"
     Close-WithEscape `
