@@ -16,7 +16,7 @@ Season-zero specials are resolved through TMDB like regular episodes. When TMDB 
 
 A TV row is only marked `Matched` when its series, season/episode number, and episode title are resolved. The match badge identifies the episode provider as `Matched · TMDB` or `Matched · TVDB`. A series-only result remains `Review needed` instead of presenting a generic filename as a completed match. If a filename already contains an episode title that conflicts with TVDB, the app leaves the row for review instead of silently replacing it.
 
-The unified review table keeps each original file beside its proposed destination, match state/provider, and row actions. Filters isolate matched, unresolved, or failed rows; **Retry Unresolved** reruns only rows that still need attention. The final action identifies the exact operation and count, such as `Copy 8 files`, and remains disabled while any row is marked `Review needed`, `Ready to match`, or `Blocked`. The file-operation layer enforces the same all-or-nothing review gate, so a mixed batch cannot partially move safe-looking rows while an unresolved row remains. TV episodes must resolve to a season and episode number before the app will apply them.
+The unified review table keeps each original file beside its proposed destination, match state/provider, and row actions. Filters isolate matched, unresolved, or failed rows; **Retry Unresolved** reruns only rows that still need attention. After matching, the first unresolved row is focused and an inline panel explains why it needs review. **Browse Episodes** searches the already matched show for an exact SxxExx choice, **Choose Show** corrects the series identity, and **Confirm Edited Details** accepts complete human-entered fields. The final action identifies the exact operation and count, such as `Copy 8 files`, and remains disabled while any row is marked `Review needed`, `Ready to match`, or `Blocked`. The file-operation layer enforces the same all-or-nothing review gate, so a mixed batch cannot partially move safe-looking rows while an unresolved row remains. TV episodes must resolve to a season and episode number before the app will apply them.
 
 After confirming a TV match, **Always use this show for this folder** remembers the provider identity and episode order. Future batches from that show folder skip the series search and resolve episodes directly. Remembered mappings can be reviewed or removed in Settings.
 
@@ -121,7 +121,7 @@ gh attestation verify .\MediaFileRenamer-win-x64.zip --repo chris-lansman/media-
 
 ## Versions and releases
 
-Release tags use semantic versions such as `v1.1.0`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; regular `main` builds receive a `1.1.0-ci.<run>` version. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
+Release tags use semantic versions such as `v1.1.1`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; regular `main` builds receive a `1.1.1-ci.<run>` version. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
 
 The release workflow verifies formatting, treats compiler warnings as errors, runs the full test suite, audits vulnerable and deprecated NuGet dependencies, publishes a self-contained Windows x64 package, starts that exact published executable as a smoke test, and verifies its SHA-256 checksum.
 
