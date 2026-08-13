@@ -1,0 +1,117 @@
+<Window x:Class="MediaFileRenamer.App.EpisodePickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
+        Title="Resolve Episode" Height="680" Width="820"
+        MinHeight="420" MinWidth="600"
+        WindowStartupLocation="CenterOwner">
+    <ScrollViewer x:Name="EpisodePickerScrollViewer"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto"
+                  CanContentScroll="False"
+                  automation:AutomationProperties.Name="Episode selection workspace">
+        <Border MinWidth="720" MinHeight="560"
+                Width="{Binding ViewportWidth, ElementName=EpisodePickerScrollViewer}"
+                Height="{Binding ViewportHeight, ElementName=EpisodePickerScrollViewer}"
+                Padding="24,22">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                    <TextBlock Text="Choose the correct episode"
+                               FontSize="26" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"/>
+                    <TextBlock x:Name="ShowTextBlock" Margin="0,4,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <Grid Grid.Row="1" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="EpisodeSearchTextBox"
+                             MinHeight="36" VerticalContentAlignment="Center"
+                             TextChanged="EpisodeSearchTextBox_TextChanged"
+                             automation:AutomationProperties.Name="Filter episodes by title or season and episode"/>
+                    <Button Grid.Column="1" Content="Clear" Margin="8,0,0,0"
+                            Click="ClearSearch_Click"
+                            automation:AutomationProperties.Name="Clear episode filter"/>
+                </Grid>
+
+                <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1" CornerRadius="8">
+                    <Grid>
+                        <ListBox x:Name="EpisodeList"
+                                 ItemsSource="{Binding EpisodeChoices}"
+                                 SelectionChanged="EpisodeList_SelectionChanged"
+                                 MouseDoubleClick="EpisodeList_MouseDoubleClick"
+                                 BorderThickness="0" Padding="4"
+                                 automation:AutomationProperties.Name="Episode choices">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="automation:AutomationProperties.Name"
+                                            Value="{Binding DisplayLabel}"/>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="12,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Coordinate}"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource AccentBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Title}"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock x:Name="NoEpisodesTextBlock"
+                                   Text="No episodes match this filter. Clear it to browse the complete show."
+                                   Visibility="Collapsed"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   MaxWidth="430" TextAlignment="Center" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   IsHitTestVisible="False"
+                                   automation:AutomationProperties.Name="Episode filter status"
+                                   automation:AutomationProperties.LiveSetting="Polite"/>
+                    </Grid>
+                </Border>
+
+                <DockPanel Grid.Row="3" Margin="0,16,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button x:Name="CancelButton" Content="_Cancel"
+                                MinWidth="92" Margin="0,0,8,0"
+                                Style="{StaticResource QuietButtonStyle}"
+                                IsCancel="True"
+                                automation:AutomationProperties.Name="Cancel episode selection"/>
+                        <Button x:Name="UseEpisodeButton" Content="Use Episode"
+                                MinWidth="124" IsEnabled="False" IsDefault="True"
+                                Click="UseEpisode_Click"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                automation:AutomationProperties.Name="Use selected episode"/>
+                    </StackPanel>
+                    <TextBlock x:Name="ResultCountTextBlock"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               automation:AutomationProperties.Name="Episode result count"
+                               automation:AutomationProperties.LiveSetting="Polite"/>
+                </DockPanel>
+            </Grid>
+        </Border>
+    </ScrollViewer>
+</Window>

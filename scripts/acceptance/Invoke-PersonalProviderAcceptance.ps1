@@ -231,11 +231,21 @@ function Get-UiaRows {
         [System.Windows.Automation.AutomationElement] $Grid
     )
 
-    return $Grid.FindAll(
-        [System.Windows.Automation.TreeScope]::Descendants,
-        [System.Windows.Automation.PropertyCondition]::new(
-            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-            [System.Windows.Automation.ControlType]::DataItem))
+    $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        try {
+            return $Grid.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                    [System.Windows.Automation.ControlType]::DataItem))
+        } catch {
+            $lastError = $_.Exception
+            Start-Sleep -Milliseconds 150
+        }
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    throw "Could not inspect the review rows after UI Automation retries: $($lastError.Message)"
 }
 
 function Open-MatchPickerForFirstRow {
@@ -432,6 +442,67 @@ try {
         -ProcessId $process.Id `
         -Name "Choose Match" `
         -Absent | Out-Null
+    Invoke-UiaElement (
+        Find-UiaElement -Root $main -AutomationId "ClearButton")
+
+    $scoobyRoot = Join-Path `
+        $fixtureRoot `
+        "Scooby Doo Where Are You"
+    [IO.Directory]::CreateDirectory($scoobyRoot) | Out-Null
+    $scoobyEpisode = Join-Path `
+        $scoobyRoot `
+        "Episode 16 The Beast Is Awake in Bottomless.mkv"
+    [IO.File]::WriteAllBytes($scoobyEpisode, [byte[]](0..63))
+    Open-SyntheticMediaFile -MainWindow $main -Path $scoobyEpisode
+    $picker = Open-MatchPickerForFirstRow -MainWindow $main
+    $scoobyCandidate = Wait-MatchCandidate `
+        -Picker $picker `
+        -Predicate {
+            param($name)
+            $name.Contains("Scooby") `
+                -and $name.Contains("TV")
+        }
+    $scoobySelection = $scoobyCandidate.GetCurrentPattern(
+        [System.Windows.Automation.SelectionItemPattern]::Pattern)
+    $scoobySelection.Select()
+    $useSelected = Find-UiaElement `
+        -Root $picker `
+        -AutomationId "UseSelectedButton"
+    Wait-UiaElementEnabled -Element $useSelected
+    Invoke-UiaElement $useSelected
+    Wait-UiaWindow `
+        -ProcessId $process.Id `
+        -Name "Choose Match" `
+        -Absent | Out-Null
+
+    $reviewGrid = Find-UiaElement `
+        -Root $main `
+        -AutomationId "OriginalGrid"
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        $scoobyRows = @(Get-UiaRows -Grid $reviewGrid)
+        $scoobyMatched = @(
+            $scoobyRows | Where-Object {
+                $_.Current.Name.Contains("S03E16") `
+                    -and $_.Current.Name -match
+                        '(?i)The Beast is Awake in Bottomless Lake'
+            }
+        ).Count -gt 0
+        if ($scoobyMatched) {
+            break
+        }
+        Start-Sleep -Milliseconds 150
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if (-not $scoobyMatched) {
+        $actualScoobyRows = @(
+            $scoobyRows | ForEach-Object { $_.Current.Name }) -join " | "
+        throw "The non-standard Scooby-Doo episode did not resolve to S03E16. Actual rows: $actualScoobyRows"
+    }
+    [void]$checks.Add([ordered]@{
+        id = "personal-provider.scooby-partial-title"
+        passed = $true
+        message = "Episode 16 with a truncated title resolved to Scooby-Doo S03E16."
+    })
     Invoke-UiaElement (
         Find-UiaElement -Root $main -AutomationId "ClearButton")
 
