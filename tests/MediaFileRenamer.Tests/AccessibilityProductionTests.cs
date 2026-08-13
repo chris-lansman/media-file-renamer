@@ -65,11 +65,18 @@ public sealed class AccessibilityProductionTests
             Status = "Needs review"
         };
         var picker = new MatchPickerWindow(item, null, "Movie", []);
+        var episodePicker = new EpisodePickerWindow(
+            item,
+            [new TmdbEpisodeChoice(1, 1, "Pilot")]);
         var recovery = new RecoveryWindow(journals, []);
         var history = new OperationHistoryWindow(journals);
 
         AssertScrollableAtConstrainedSize(
             (ScrollViewer)picker.FindName("MatchPickerScrollViewer"),
+            700,
+            400);
+        AssertScrollableAtConstrainedSize(
+            (ScrollViewer)episodePicker.FindName("EpisodePickerScrollViewer"),
             700,
             400);
         AssertScrollableAtConstrainedSize(
@@ -83,6 +90,8 @@ public sealed class AccessibilityProductionTests
 
         Assert.IsTrue(((Button)picker.FindName("CancelButton")).IsCancel);
         Assert.IsTrue(((Button)picker.FindName("UseSelectedButton")).IsDefault);
+        Assert.IsTrue(((Button)episodePicker.FindName("CancelButton")).IsCancel);
+        Assert.IsTrue(((Button)episodePicker.FindName("UseEpisodeButton")).IsDefault);
         Assert.IsTrue(((Button)history.FindName("CloseButton")).IsCancel);
         AssertLiveRegion(picker, "SearchStatusTextBlock", "Metadata search status");
         AssertLiveRegion(recovery, "RecoveryStatusTextBlock", "Recovery status");
@@ -92,6 +101,7 @@ public sealed class AccessibilityProductionTests
             "Operation history status");
 
         picker.Close();
+        episodePicker.Close();
         recovery.Close();
         history.Close();
     }

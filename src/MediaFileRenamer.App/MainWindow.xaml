@@ -148,6 +148,7 @@
             <Grid Grid.Row="2">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -176,12 +177,12 @@
                             <ComboBoxItem Content="Matched"/>
                             <ComboBoxItem Content="Failed"/>
                         </ComboBox>
-                        <Button x:Name="MatchSelectedButton" Content="Match Selected" MinWidth="118"
+                        <Button x:Name="MatchSelectedButton" Content="Retry Selected" MinWidth="118"
                                 Margin="0,0,8,0" Click="MatchSelected_Click" IsEnabled="False"
-                                AutomationProperties.Name="Match selected file"/>
-                        <Button x:Name="ChooseSelectedButton" Content="Choose Match..." MinWidth="124"
+                                AutomationProperties.Name="Retry matching the selected file"/>
+                        <Button x:Name="ChooseSelectedButton" Content="Choose Show..." MinWidth="124"
                                 Margin="0,0,8,0" Click="ChooseSelected_Click" IsEnabled="False"
-                                AutomationProperties.Name="Choose match for selected file"/>
+                                AutomationProperties.Name="Choose the movie or show for the selected file"/>
                         <Button x:Name="RetryUnresolvedButton" Content="Retry Unresolved" MinWidth="126"
                                 Margin="0,0,8,0" Click="RetryUnresolved_Click" IsEnabled="False"
                                 AutomationProperties.Name="Retry unresolved files"/>
@@ -192,7 +193,54 @@
                     </WrapPanel>
                 </Grid>
 
-                <Grid Grid.Row="1">
+                <Border Grid.Row="1" x:Name="ReviewGuidancePanel"
+                        Margin="0,0,0,10" Padding="14"
+                        Background="{DynamicResource ReviewSoftBrush}"
+                        BorderBrush="#F0D29A" BorderThickness="1"
+                        CornerRadius="6"
+                        AutomationProperties.Name="Selected file review guidance">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedItem.RequiresReview, ElementName=OriginalGrid}"
+                                             Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,18,0">
+                            <TextBlock Text="Why this needs review"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource ReviewBrush}"/>
+                            <TextBlock Text="{Binding SelectedItem.ReviewReason, ElementName=OriginalGrid}"
+                                       Margin="0,4,0,0" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextBrush}"/>
+                            <TextBlock Text="{Binding SelectedItem.ReviewSuggestion, ElementName=OriginalGrid}"
+                                       Margin="0,4,0,0" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MutedTextBrush}"/>
+                        </StackPanel>
+                        <WrapPanel Grid.Column="1" VerticalAlignment="Center">
+                            <Button x:Name="ResolveReviewButton"
+                                    Content="Browse Episodes..." Margin="0,0,8,0"
+                                    Click="ResolveReview_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    AutomationProperties.Name="Resolve the selected review"/>
+                            <Button x:Name="ChooseDifferentShowButton"
+                                    Content="Choose Different Show..."
+                                    Click="ChooseSelected_Click"
+                                    AutomationProperties.Name="Choose a different movie or show"/>
+                        </WrapPanel>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="2">
                     <DataGrid x:Name="OriginalGrid"
                               Style="{StaticResource PaneGridStyle}"
                               ItemsSource="{Binding PreviewItems}"
@@ -279,12 +327,12 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal">
-                                            <Button Content="Match" Padding="9,4" Margin="0,0,6,0"
+                                            <Button Content="Retry" Padding="9,4" Margin="0,0,6,0"
                                                     Click="MatchRow_Click"
-                                                    AutomationProperties.Name="Match this file"/>
-                                            <Button Content="Choose..." Padding="9,4"
+                                                    AutomationProperties.Name="Retry matching this file"/>
+                                            <Button Content="Resolve..." Padding="9,4"
                                                     Click="ChooseRow_Click"
-                                                    AutomationProperties.Name="Choose match for this file"/>
+                                                    AutomationProperties.Name="Resolve review for this file"/>
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -419,6 +467,11 @@
 
                     <WrapPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="10"
                                Margin="0,12,0,0">
+                        <Button x:Name="ConfirmManualDetailsButton"
+                                Content="Confirm Edited Details" Margin="0,0,8,0"
+                                Click="ConfirmManualDetails_Click"
+                                IsEnabled="{Binding SelectedItem.CanConfirmManualDetails, ElementName=OriginalGrid}"
+                                AutomationProperties.Name="Confirm the manually edited media details"/>
                         <Button x:Name="RememberShowMappingButton"
                                 Content="Always use this show for this folder"
                                 Click="RememberShowMapping_Click"

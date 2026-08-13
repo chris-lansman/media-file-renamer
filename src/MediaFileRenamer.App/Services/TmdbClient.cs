@@ -95,6 +95,19 @@ public sealed class TmdbClient
         };
     }
 
+    public async Task<IReadOnlyList<TmdbEpisodeChoice>> GetEpisodeChoicesAsync(
+        int tvId,
+        CancellationToken cancellationToken = default)
+    {
+        var episodes = await GetEpisodesAsync(tvId, cancellationToken);
+        return episodes
+            .Select(episode => new TmdbEpisodeChoice(
+                episode.Season,
+                episode.Number,
+                episode.Name))
+            .ToList();
+    }
+
     public async Task<TmdbCandidate?> FindTvByTvdbIdAsync(
         int tvdbId,
         CancellationToken cancellationToken = default)
@@ -287,8 +300,7 @@ public sealed class TmdbClient
         var episodes = await GetEpisodesAsync(id, cancellationToken);
         if (!string.IsNullOrWhiteSpace(item.EpisodeTitle))
         {
-            var normalizedTitle = Normalize(item.EpisodeTitle);
-            var byTitle = episodes.FirstOrDefault(episode => Normalize(episode.Name) == normalizedTitle);
+            var byTitle = FindBestEpisodeTitleMatch(item, episodes);
             if (byTitle is not null)
             {
                 return byTitle;
@@ -298,6 +310,49 @@ public sealed class TmdbClient
         return item.Season is null || item.Episode is null
             ? null
             : episodes.FirstOrDefault(episode => episode.Season == item.Season && episode.Number == item.Episode);
+    }
+
+    internal static TmdbEpisode? FindBestEpisodeTitleMatch(
+        MediaPreviewItem item,
+        IReadOnlyList<TmdbEpisode> episodes)
+    {
+        var normalizedTitle = Normalize(item.EpisodeTitle);
+        if (normalizedTitle.Length == 0)
+        {
+            return null;
+        }
+
+        var exact = episodes.FirstOrDefault(episode =>
+            Normalize(episode.Name) == normalizedTitle);
+        if (exact is not null)
+        {
+            return exact;
+        }
+
+        if (normalizedTitle.Length < 10)
+        {
+            return null;
+        }
+
+        var ranked = episodes
+            .Select(episode => new
+            {
+                Episode = episode,
+                Score = Similarity(normalizedTitle, Normalize(episode.Name))
+                    + (item.Season == episode.Season ? 0.08 : 0)
+                    + (item.Episode == episode.Number ? 0.05 : 0)
+            })
+            .OrderByDescending(result => result.Score)
+            .Take(2)
+            .ToList();
+        if (ranked.Count == 0
+            || ranked[0].Score < 0.82
+            || (ranked.Count > 1 && ranked[0].Score - ranked[1].Score < 0.06))
+        {
+            return null;
+        }
+
+        return ranked[0].Episode;
     }
 
     private async Task<IReadOnlyList<TmdbEpisode>> GetEpisodesAsync(
@@ -699,6 +754,11 @@ public sealed record TmdbCandidate(
 public sealed record TmdbAutoMatch(TmdbCandidate Candidate, int ConfidencePercent)
 {
     public IReadOnlyList<string> Evidence { get; init; } = [];
+}
+public sealed record TmdbEpisodeChoice(int Season, int Episode, string Title)
+{
+    public string Coordinate => $"S{Season:00}E{Episode:00}";
+    public string DisplayLabel => $"{Coordinate}  {Title}";
 }
 internal sealed record TmdbEpisode(string Name, int Season, int Number);
 
