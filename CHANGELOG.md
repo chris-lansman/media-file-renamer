@@ -5,6 +5,21 @@ Notable user-visible changes are recorded here. This project follows
 
 ## Unreleased
 
+## 1.1.1 - 2026-08-12
+
+### Added
+
+- Actionable `Review needed` guidance that explains the problem and focuses the first unresolved row.
+- A searchable episode browser for choosing an exact episode from an already matched show.
+- An explicit **Confirm Edited Details** action so human corrections clear the review gate safely.
+- Real-provider regression coverage for non-standard Scooby-Doo episode names.
+
+### Changed
+
+- Missing seasons are inferred from sibling files only when every explicit sibling season agrees.
+- High-confidence partial episode titles can resolve conservatively when the provider title contains extra words.
+- Review actions now distinguish retrying metadata, choosing a show, browsing episodes, and confirming manual edits.
+
 ## 1.1.0 - 2026-07-30
 
 ### Added
