@@ -10,6 +10,8 @@
 6. Confirm that the `Validate`, `Package Windows x64`, and `Publish GitHub release` jobs all pass.
 7. Download the release ZIP and checksum, verify the checksum, and launch the packaged executable on a clean Windows user profile.
 
+Routine pushes to `main` run validation only. Use **Actions → Build, test, and package → Run workflow** when a downloadable development package is specifically needed; release tags always package and publish a GitHub Release.
+
 The workflow will reject a tag that does not resolve to a three-part semantic version.
 
 ## Optional Authenticode signing
