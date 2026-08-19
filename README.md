@@ -88,7 +88,7 @@ The PowerShell script is only a developer helper for running from source.
 
 ## Downloadable builds
 
-Every push to `main` that passes the test suite produces a downloadable Windows ZIP on that workflow run's GitHub Actions page. These development artifacts are retained for 30 days.
+Every push to `main` runs the full validation gate. A downloadable Windows ZIP is created only for a version tag or an explicitly started manual workflow run, avoiding duplicate package storage for routine development pushes.
 
 Version tags such as `v1.1.0` produce a permanent GitHub Release containing:
 
@@ -121,7 +121,7 @@ gh attestation verify .\MediaFileRenamer-win-x64.zip --repo chris-lansman/media-
 
 ## Versions and releases
 
-Release tags use semantic versions such as `v1.1.1`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; regular `main` builds receive a `1.1.1-ci.<run>` version. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
+Release tags use semantic versions such as `v1.1.1`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; manually triggered non-tag packages receive a `1.1.1-ci.<run>` version. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
 
 The release workflow verifies formatting, treats compiler warnings as errors, runs the full test suite, audits vulnerable and deprecated NuGet dependencies, publishes a self-contained Windows x64 package, starts that exact published executable as a smoke test, and verifies its SHA-256 checksum.
 
