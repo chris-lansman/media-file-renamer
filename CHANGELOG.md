@@ -5,6 +5,15 @@ Notable user-visible changes are recorded here. This project follows
 
 ## Unreleased
 
+### Added
+
+- The app now checks GitHub Releases at startup and offers an available update.
+- The update window can download the published Windows package, verify its SHA-256 checksum, install it after the app closes, and restart the updated app.
+
+### Security
+
+- Automatic updates accept only the expected ZIP and checksum assets from this repository's HTTPS GitHub Release path, reject unsafe archive paths, and preserve a rollback copy while replacing files.
+
 ## 1.1.2 - 2026-08-21
 
 ### Fixed
