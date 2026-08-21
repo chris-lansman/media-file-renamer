@@ -288,7 +288,7 @@ public sealed partial class MediaScanner
             };
         }
 
-        var movieTitle = yearMatch.Success ? TrimTitle(cleaned[..yearMatch.Index]) : TrimTitle(cleaned);
+        var movieTitle = ParseMovieTitle(cleaned, yearMatch);
         return new MediaPreviewItem
         {
             SourcePath = path,
@@ -309,6 +309,19 @@ public sealed partial class MediaScanner
         return int.TryParse(match.Groups["episodeEnd"].Value, out var episodeEnd)
             ? episodeEnd
             : null;
+    }
+
+    private static string ParseMovieTitle(string cleaned, Match yearMatch)
+    {
+        if (!yearMatch.Success)
+        {
+            return TrimTitle(cleaned);
+        }
+
+        var titleBeforeYear = TrimTitle(cleaned[..yearMatch.Index]);
+        return string.IsNullOrWhiteSpace(titleBeforeYear)
+            ? TrimTitle(cleaned[(yearMatch.Index + yearMatch.Length)..])
+            : titleBeforeYear;
     }
 
     private static bool TryParseAirDate(Match match, out DateOnly airDate)
@@ -430,7 +443,7 @@ public sealed partial class MediaScanner
     [GeneratedRegex(@"\b(?<year>19\d{2}|20\d{2})\b")]
     private static partial Regex YearPattern();
 
-    [GeneratedRegex(@"\b(480p|720p|1080p|2160p|4k\d{2,3}|4k|uhd|web[- ]?dl|webrip|bluray|brrip|dvdrip|hdrip|remux|hdr10|hdr|dolby[- ]?vision|dovi|dv|av1|10bit|8bit|x26[45]?|h26[45]|hevc|aac|dts|truehd|atmos|proper|repack|no[- ]?dnr|\d{2}mm)\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(\d{3,4}\s*x\s*\d{3,4}|480p|720p|1080p|2160p|4k\d{2,3}|4k|uhd|web[- ]?dl|webrip|bluray|b[dr]rip|dvdrip|hdrip|remux|hdr10|hdr|dolby[- ]?vision|dovi|dv|av1|10bit|8bit|x26[45]?|h26[45]|hevc|aac|dts(?:[- .]?(?:hd|x))?(?:[- .]?(?:ma|es))?|truehd|atmos|proper|repack|no[- ]?dnr|\d{2}mm)\b", RegexOptions.IgnoreCase)]
     private static partial Regex ReleaseNoisePattern();
 
     [GeneratedRegex(@"^\s*\d{1,3}\s*[- .]+\s*", RegexOptions.IgnoreCase)]
