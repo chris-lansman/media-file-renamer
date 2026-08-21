@@ -310,4 +310,45 @@ public sealed class SecondaryUxPolishTests
             Path.Combine(installationDirectory, "Assets", "readme.txt")));
         Assert.AreEqual("keep me", File.ReadAllText(preserved));
     }
+
+    [TestMethod]
+    public void UpdateInstaller_CopiesTheRuntimeRequiredByItsHelper()
+    {
+        using var temp = new TempDirectory();
+        var installationDirectory = temp.CreateDirectory("Installed app");
+        var sessionDirectory = temp.CreateDirectory("Update session");
+        var executable = Path.Combine(installationDirectory, "MediaFileRenamer.exe");
+        File.WriteAllText(executable, "app host");
+        File.WriteAllText(
+            Path.Combine(installationDirectory, "MediaFileRenamer.dll"),
+            "app assembly");
+        File.WriteAllText(
+            Path.Combine(installationDirectory, "MediaFileRenamer.deps.json"),
+            "dependencies");
+        File.WriteAllText(
+            Path.Combine(installationDirectory, "MediaFileRenamer.runtimeconfig.json"),
+            "runtime");
+        var satelliteDirectory = Path.Combine(installationDirectory, "de");
+        Directory.CreateDirectory(satelliteDirectory);
+        File.WriteAllText(Path.Combine(satelliteDirectory, "resources.dll"), "satellite");
+        File.WriteAllText(Path.Combine(installationDirectory, "user-notes.txt"), "do not copy");
+
+        var helperPath = UpdateDownloadService.CopyHelperRuntime(
+            executable,
+            sessionDirectory);
+        var helperDirectory = Path.GetDirectoryName(helperPath)!;
+
+        Assert.AreEqual(
+            Path.Combine(sessionDirectory, "update-helper", "MediaFileRenamer.exe"),
+            helperPath);
+        Assert.IsTrue(File.Exists(Path.Combine(helperDirectory, "MediaFileRenamer.dll")));
+        Assert.IsTrue(File.Exists(Path.Combine(
+            helperDirectory,
+            "MediaFileRenamer.deps.json")));
+        Assert.IsTrue(File.Exists(Path.Combine(
+            helperDirectory,
+            "MediaFileRenamer.runtimeconfig.json")));
+        Assert.IsTrue(File.Exists(Path.Combine(helperDirectory, "de", "resources.dll")));
+        Assert.IsFalse(File.Exists(Path.Combine(helperDirectory, "user-notes.txt")));
+    }
 }

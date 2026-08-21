@@ -3,6 +3,12 @@
 Notable user-visible changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/) for tagged releases.
 
+## 1.1.4 - 2026-08-21
+
+### Fixed
+
+- The updater now stages the portable app host together with the .NET runtime files it needs, so the post-exit helper can reliably install and restart the update.
+
 ## 1.1.3 - 2026-08-21
 
 ### Added
