@@ -76,10 +76,7 @@ internal sealed class UpdateDownloadService
                 PackageAssetName);
             await VerifyChecksumAsync(packagePath, expectedChecksum, cancellationToken);
 
-            var helperPath = Path.Combine(
-                sessionDirectory,
-                "MediaFileRenamer.UpdateHelper.exe");
-            File.Copy(executablePath, helperPath, overwrite: true);
+            var helperPath = CopyHelperRuntime(executablePath, sessionDirectory);
 
             var planPath = Path.Combine(sessionDirectory, "update-plan.json");
             var plan = new UpdateLaunchPlan(
@@ -217,6 +214,60 @@ internal sealed class UpdateDownloadService
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
+    }
+
+    internal static string CopyHelperRuntime(
+        string executablePath,
+        string sessionDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionDirectory);
+
+        var installationDirectory = Path.GetDirectoryName(executablePath)
+            ?? throw new InvalidOperationException(
+                "The current application executable has no installation folder.");
+        var helperDirectory = Path.Combine(sessionDirectory, "update-helper");
+        var helperPath = Path.Combine(
+            helperDirectory,
+            Path.GetFileName(executablePath));
+        Directory.CreateDirectory(helperDirectory);
+        File.Copy(executablePath, helperPath, overwrite: true);
+
+        foreach (var runtimeFile in Directory.EnumerateFiles(
+                     installationDirectory,
+                     "*.dll",
+                     SearchOption.AllDirectories)
+                 .Concat(Directory.EnumerateFiles(
+                     installationDirectory,
+                     "*.deps.json",
+                     SearchOption.TopDirectoryOnly))
+                 .Concat(Directory.EnumerateFiles(
+                     installationDirectory,
+                     "*.runtimeconfig.json",
+                     SearchOption.TopDirectoryOnly)))
+        {
+            var relativePath = Path.GetRelativePath(
+                installationDirectory,
+                runtimeFile);
+            var destination = Path.GetFullPath(Path.Combine(
+                helperDirectory,
+                relativePath));
+            var fullHelperDirectory = Path.GetFullPath(helperDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            if (!destination.StartsWith(
+                    fullHelperDirectory,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The current application folder contains an unsafe runtime path.");
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(runtimeFile, destination, overwrite: true);
+        }
+
+        return helperPath;
     }
 
     private static HttpClient CreateClient() => new()
