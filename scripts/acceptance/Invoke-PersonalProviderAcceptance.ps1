@@ -445,6 +445,34 @@ try {
     Invoke-UiaElement (
         Find-UiaElement -Root $main -AutomationId "ClearButton")
 
+    $leadingYearMoviePath = Join-Path `
+        $fixtureRoot `
+        "1987.Lethal.Weapon.1920x1080.BDRip.x264.DTS-HD.MA.mkv"
+    [IO.File]::WriteAllBytes($leadingYearMoviePath, [byte[]](0..63))
+    Open-SyntheticMediaFile -MainWindow $main -Path $leadingYearMoviePath
+    $picker = Open-MatchPickerForFirstRow -MainWindow $main
+    $leadingYearMovieCandidate = Wait-MatchCandidate `
+        -Picker $picker `
+        -Predicate {
+            param($name)
+            $name.Contains("Lethal Weapon") `
+                -and $name.Contains("1987") `
+                -and $name.Contains("Movie")
+        }
+    [void]$checks.Add([ordered]@{
+        id = "personal-provider.leading-year-movie"
+        passed = $true
+        message = "Leading-year BDRip filename resolved to the 1987 Lethal Weapon movie candidate."
+    })
+    Invoke-UiaElement (
+        Find-UiaElement -Root $picker -AutomationId "CancelButton")
+    Wait-UiaWindow `
+        -ProcessId $process.Id `
+        -Name "Choose Match" `
+        -Absent | Out-Null
+    Invoke-UiaElement (
+        Find-UiaElement -Root $main -AutomationId "ClearButton")
+
     $scoobyRoot = Join-Path `
         $fixtureRoot `
         "Scooby Doo Where Are You"
