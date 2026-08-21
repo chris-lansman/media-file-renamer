@@ -1,5 +1,6 @@
 using MediaFileRenamer.App.Services;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
@@ -13,21 +14,32 @@ public partial class AboutWindow : Window
     private static readonly Uri ReleasesPageUri = new(
         "https://github.com/chris-lansman/media-file-renamer/releases/latest");
     private readonly IUpdateChecker _updateChecker;
+    private readonly UpdateDownloadService _updateDownloadService;
     private readonly Version _currentVersion;
     private CancellationTokenSource? _updateCancellation;
     private Uri _latestReleaseUri = ReleasesPageUri;
+    private UpdateCheckResult? _latestUpdate;
 
     public AboutWindow()
         : this(new GitHubReleaseUpdateChecker(), GetApplicationVersion())
     {
     }
 
-    internal AboutWindow(IUpdateChecker updateChecker, Version currentVersion)
+    internal AboutWindow(
+        IUpdateChecker updateChecker,
+        Version currentVersion,
+        UpdateDownloadService? updateDownloadService = null,
+        UpdateCheckResult? initialUpdate = null)
     {
         InitializeComponent();
         _updateChecker = updateChecker;
         _currentVersion = currentVersion;
+        _updateDownloadService = updateDownloadService ?? new UpdateDownloadService();
         VersionTextBlock.Text = $"Version {_currentVersion.ToString(3)}";
+        if (initialUpdate is not null)
+        {
+            ApplyUpdateResult(initialUpdate);
+        }
     }
 
     private void Link_RequestNavigate(object sender, RequestNavigateEventArgs e)
@@ -87,11 +99,7 @@ public partial class AboutWindow : Window
             var result = await _updateChecker.CheckAsync(
                 _currentVersion,
                 _updateCancellation.Token);
-            _latestReleaseUri = result.ReleaseUri;
-            UpdateStatusTextBlock.Foreground =
-                (System.Windows.Media.Brush)FindResource(
-                    result.UpdateAvailable ? "ReviewBrush" : "MatchBrush");
-            UpdateStatusTextBlock.Text = result.Message;
+            ApplyUpdateResult(result);
         }
         catch (OperationCanceledException)
         {
@@ -113,6 +121,67 @@ public partial class AboutWindow : Window
         }
     }
 
+    private async void InstallUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        var package = _latestUpdate?.Package;
+        if (package is null)
+        {
+            OpenRelease_Click(sender, e);
+            return;
+        }
+
+        var confirmation = System.Windows.MessageBox.Show(
+            this,
+            $"Download and install version {package.Version.ToString(3)} now? "
+            + "The app will close briefly and restart when the verified update is ready.",
+            "Install update",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Question);
+        if (confirmation != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        _updateCancellation?.Cancel();
+        _updateCancellation?.Dispose();
+        _updateCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(12));
+        CheckForUpdatesButton.IsEnabled = false;
+        OpenReleaseButton.IsEnabled = false;
+        InstallUpdateButton.IsEnabled = false;
+        UpdateStatusTextBlock.Foreground =
+            (System.Windows.Media.Brush)FindResource("MutedTextBrush");
+        UpdateStatusTextBlock.Text =
+            $"Downloading and verifying version {package.Version.ToString(3)}...";
+
+        try
+        {
+            await _updateDownloadService.DownloadAndLaunchAsync(
+                package,
+                GetRelaunchArguments(),
+                _updateCancellation.Token);
+            UpdateStatusTextBlock.Text = "Update verified. Closing to install and restart...";
+            await Task.Delay(250);
+            System.Windows.Application.Current.Shutdown();
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateStatusTextBlock.Text =
+                "The update download timed out or was cancelled. Your current version is still installed.";
+            RestoreUpdateActions();
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException
+                or IOException
+                or InvalidOperationException
+                or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Current.Error("Could not download or start the update helper.", ex);
+            UpdateStatusTextBlock.Text =
+                "The update could not be installed. Your current version is still installed; try again or open the release page.";
+            RestoreUpdateActions();
+        }
+    }
+
     private void OpenRelease_Click(object sender, RoutedEventArgs e)
     {
         OpenUri(_latestReleaseUri, "Windows could not open the release page.");
@@ -123,6 +192,48 @@ public partial class AboutWindow : Window
         _updateCancellation?.Cancel();
         _updateCancellation?.Dispose();
         base.OnClosed(e);
+    }
+
+    private static IReadOnlyList<string> GetRelaunchArguments()
+    {
+        var arguments = Environment.GetCommandLineArgs().Skip(1).ToArray();
+        var relaunchArguments = new List<string>(arguments.Length);
+        for (var index = 0; index < arguments.Length; index++)
+        {
+            if (string.Equals(
+                    arguments[index],
+                    "--apply-update-plan",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                index++;
+                continue;
+            }
+
+            relaunchArguments.Add(arguments[index]);
+        }
+
+        return relaunchArguments;
+    }
+
+    private void RestoreUpdateActions()
+    {
+        CheckForUpdatesButton.IsEnabled = true;
+        OpenReleaseButton.IsEnabled = true;
+        InstallUpdateButton.IsEnabled = _latestUpdate?.CanInstall == true;
+    }
+
+    private void ApplyUpdateResult(UpdateCheckResult result)
+    {
+        _latestUpdate = result;
+        _latestReleaseUri = result.ReleaseUri;
+        InstallUpdateButton.Visibility = result.CanInstall
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        InstallUpdateButton.IsEnabled = result.CanInstall;
+        UpdateStatusTextBlock.Foreground =
+            (System.Windows.Media.Brush)FindResource(
+                result.UpdateAvailable ? "ReviewBrush" : "MatchBrush");
+        UpdateStatusTextBlock.Text = result.Message;
     }
 
     private void OpenUri(Uri uri, string failureMessage)
@@ -202,15 +313,76 @@ internal sealed class GitHubReleaseUpdateChecker : IUpdateChecker
                 "GitHub returned incomplete release information.");
         }
 
+        var package = TryGetPackage(root, latestVersion, releaseUri);
         var updateAvailable = latestVersion > Normalize(currentVersion);
         var message = updateAvailable
-            ? $"Version {latestVersion.ToString(3)} is available. Open the release page to download it."
+            ? package is not null
+                ? $"Version {latestVersion.ToString(3)} is available. Choose Install update to download, verify, and restart."
+                : $"Version {latestVersion.ToString(3)} is available. Open the release page to download it."
             : $"You are up to date. Version {currentVersion.ToString(3)} is the latest release.";
         return new UpdateCheckResult(
             updateAvailable,
             latestVersion,
             releaseUri,
+            package,
             message);
+    }
+
+    private static UpdatePackage? TryGetPackage(
+        JsonElement root,
+        Version latestVersion,
+        Uri releaseUri)
+    {
+        if (!root.TryGetProperty("assets", out var assets)
+            || assets.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        Uri? packageUri = null;
+        Uri? checksumUri = null;
+        foreach (var asset in assets.EnumerateArray())
+        {
+            var name = asset.TryGetProperty("name", out var nameElement)
+                ? nameElement.GetString()
+                : null;
+            var download = asset.TryGetProperty("browser_download_url", out var downloadElement)
+                ? downloadElement.GetString()
+                : null;
+            if (!Uri.TryCreate(download, UriKind.Absolute, out var downloadUri))
+            {
+                continue;
+            }
+
+            if (string.Equals(name, UpdateDownloadService.PackageAssetName, StringComparison.Ordinal))
+            {
+                packageUri = downloadUri;
+            }
+            else if (string.Equals(name, UpdateDownloadService.ChecksumAssetName, StringComparison.Ordinal))
+            {
+                checksumUri = downloadUri;
+            }
+        }
+
+        if (packageUri is null || checksumUri is null)
+        {
+            return null;
+        }
+
+        var package = new UpdatePackage(
+            latestVersion,
+            releaseUri,
+            packageUri,
+            checksumUri);
+        try
+        {
+            UpdateDownloadService.ValidateOfficialPackage(package);
+            return package;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     internal static bool TryParseReleaseVersion(
@@ -248,4 +420,8 @@ internal sealed record UpdateCheckResult(
     bool UpdateAvailable,
     Version LatestVersion,
     Uri ReleaseUri,
-    string Message);
+    UpdatePackage? Package,
+    string Message)
+{
+    public bool CanInstall => UpdateAvailable && Package is not null;
+}

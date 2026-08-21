@@ -1,6 +1,9 @@
 using MediaFileRenamer.App;
 using MediaFileRenamer.App.Services;
+using System.IO.Compression;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -161,7 +164,17 @@ public sealed class SecondaryUxPolishTests
                 """
                 {
                   "tag_name": "v1.2.0",
-                  "html_url": "https://github.com/chris-lansman/media-file-renamer/releases/tag/v1.2.0"
+                  "html_url": "https://github.com/chris-lansman/media-file-renamer/releases/tag/v1.2.0",
+                  "assets": [
+                    {
+                      "name": "MediaFileRenamer-win-x64.zip",
+                      "browser_download_url": "https://github.com/chris-lansman/media-file-renamer/releases/download/v1.2.0/MediaFileRenamer-win-x64.zip"
+                    },
+                    {
+                      "name": "MediaFileRenamer-win-x64.zip.sha256",
+                      "browser_download_url": "https://github.com/chris-lansman/media-file-renamer/releases/download/v1.2.0/MediaFileRenamer-win-x64.zip.sha256"
+                    }
+                  ]
                 }
                 """);
         }));
@@ -172,6 +185,8 @@ public sealed class SecondaryUxPolishTests
             CancellationToken.None);
 
         Assert.IsTrue(result.UpdateAvailable);
+        Assert.IsTrue(result.CanInstall);
+        Assert.IsNotNull(result.Package);
         Assert.AreEqual(new Version(1, 2, 0), result.LatestVersion);
         StringAssert.Contains(result.Message, "1.2.0 is available");
         Assert.IsNotNull(capturedRequest);
@@ -220,5 +235,79 @@ public sealed class SecondaryUxPolishTests
                 tag,
                 out var version));
         Assert.AreEqual(new Version(major, minor, build), version);
+    }
+
+    [TestMethod]
+    public void UpdateChecker_RefusesAssetsOutsideTheOfficialReleasePath()
+    {
+        var package = new UpdatePackage(
+            new Version(1, 2, 0),
+            new Uri("https://github.com/chris-lansman/media-file-renamer/releases/tag/v1.2.0"),
+            new Uri("https://example.test/MediaFileRenamer-win-x64.zip"),
+            new Uri("https://example.test/MediaFileRenamer-win-x64.zip.sha256"));
+
+        var exception = Assert.ThrowsExactly<InvalidOperationException>(() =>
+            UpdateDownloadService.ValidateOfficialPackage(package));
+
+        StringAssert.Contains(exception.Message, "official GitHub release asset");
+    }
+
+    [TestMethod]
+    public void UpdateInstaller_ParsesOnlyTheExpectedSha256Record()
+    {
+        var hash = new string('a', 64);
+
+        var parsed = UpdateDownloadService.ParseChecksum(
+            $"{hash} *MediaFileRenamer-win-x64.zip",
+            "MediaFileRenamer-win-x64.zip");
+
+        Assert.AreEqual(hash.ToUpperInvariant(), parsed);
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            UpdateDownloadService.ParseChecksum(
+                $"{hash} other.zip",
+                "MediaFileRenamer-win-x64.zip"));
+    }
+
+    [TestMethod]
+    public void UpdateInstaller_AppliesVerifiedPackageAndKeepsUnrelatedFiles()
+    {
+        using var temp = new TempDirectory();
+        var installationDirectory = temp.CreateDirectory("Installed app");
+        var sessionDirectory = temp.CreateDirectory("Update session");
+        var executable = Path.Combine(installationDirectory, "MediaFileRenamer.exe");
+        var preserved = Path.Combine(installationDirectory, "user-notes.txt");
+        File.WriteAllText(executable, "old executable");
+        File.WriteAllText(preserved, "keep me");
+
+        var packagePath = Path.Combine(sessionDirectory, "MediaFileRenamer-win-x64.zip");
+        using (var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+        {
+            using (var writer = new StreamWriter(
+                       archive.CreateEntry("MediaFileRenamer.exe").Open()))
+            {
+                writer.Write("new executable");
+            }
+
+            using var assetWriter = new StreamWriter(
+                archive.CreateEntry("Assets/readme.txt").Open());
+            assetWriter.Write("new asset");
+        }
+
+        var checksum = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(packagePath)));
+        var planPath = Path.Combine(sessionDirectory, "update-plan.json");
+        var plan = new UpdateLaunchPlan(
+            ParentProcessId: 0,
+            InstallationDirectory: installationDirectory,
+            PackagePath: packagePath,
+            ExpectedSha256: checksum,
+            RelaunchArguments: []);
+        File.WriteAllText(planPath, JsonSerializer.Serialize(plan));
+
+        UpdateInstallService.ApplyUpdatePlan(planPath, restartApplication: false);
+
+        Assert.AreEqual("new executable", File.ReadAllText(executable));
+        Assert.AreEqual("new asset", File.ReadAllText(
+            Path.Combine(installationDirectory, "Assets", "readme.txt")));
+        Assert.AreEqual("keep me", File.ReadAllText(preserved));
     }
 }

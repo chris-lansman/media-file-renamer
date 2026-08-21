@@ -64,6 +64,10 @@
                                     Margin="8,0,0,0"
                                     Click="OpenRelease_Click"
                                     automation:AutomationProperties.Name="Open latest release download page"/>
+                            <Button x:Name="InstallUpdateButton" Content="_Install update"
+                                    Margin="8,0,0,0" Visibility="Collapsed"
+                                    Click="InstallUpdate_Click"
+                                    automation:AutomationProperties.Name="Download, verify, and install available update"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

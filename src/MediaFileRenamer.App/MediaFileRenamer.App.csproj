@@ -20,7 +20,7 @@
     <Authors>Media File Renamer contributors</Authors>
     <RepositoryUrl>https://github.com/chris-lansman/media-file-renamer</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <VersionPrefix>1.1.2</VersionPrefix>
+    <VersionPrefix>1.1.3</VersionPrefix>
     <NeutralLanguage>en-US</NeutralLanguage>
     <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
