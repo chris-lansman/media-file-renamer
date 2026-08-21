@@ -1,6 +1,8 @@
 using MediaFileRenamer.App.Services;
 using Microsoft.Win32;
 using System.ComponentModel;
+using System.Net.Http;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -21,6 +23,25 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        if (UpdateInstallService.TryApplyFromArguments(e.Args, out var updateFailure))
+        {
+            if (!string.IsNullOrWhiteSpace(updateFailure))
+            {
+                System.Windows.MessageBox.Show(
+                    updateFailure,
+                    "Update could not be installed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                Shutdown(1);
+            }
+            else
+            {
+                Shutdown(0);
+            }
+
+            return;
+        }
+
         try
         {
             var options = AppStartupOptions.Parse(e.Args);
@@ -41,8 +62,54 @@ public partial class App : System.Windows.Application
         }
 
         ApplyColorPalette();
+        UpdateInstallService.CleanupStaleSessions();
         DiagnosticLog.Current.Information("Application starting.");
         base.OnStartup(e);
+        _ = OfferAvailableUpdateAsync();
+    }
+
+    private async Task OfferAvailableUpdateAsync()
+    {
+        try
+        {
+            var currentVersion = Assembly.GetEntryAssembly()?.GetName().Version
+                ?? new Version(0, 0, 0);
+            var update = await new GitHubReleaseUpdateChecker().CheckAsync(
+                currentVersion,
+                CancellationToken.None);
+            if (!update.UpdateAvailable)
+            {
+                return;
+            }
+
+            var choice = System.Windows.MessageBox.Show(
+                $"Version {update.LatestVersion.ToString(3)} is available. Open the update window now?",
+                "Media File Renamer update available",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+            if (choice != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            var window = new AboutWindow(
+                new GitHubReleaseUpdateChecker(),
+                currentVersion,
+                initialUpdate: update);
+            if (MainWindow is Window owner)
+            {
+                window.Owner = owner;
+            }
+
+            window.Show();
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException
+                or TaskCanceledException
+                or InvalidOperationException)
+        {
+            DiagnosticLog.Current.Information("Automatic update check was unavailable.");
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
