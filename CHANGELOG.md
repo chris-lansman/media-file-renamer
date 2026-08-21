@@ -5,6 +5,13 @@ Notable user-visible changes are recorded here. This project follows
 
 ## Unreleased
 
+## 1.1.2 - 2026-08-21
+
+### Fixed
+
+- Leading-year movie releases such as `1987.Lethal.Weapon.1920x1080.BDRip.x264.DTS-HD.MA.mkv` now extract `Lethal Weapon` and `1987` before matching.
+- Release-name cleanup now recognizes common resolution, BDRip, and DTS-HD MA tokens so they do not contaminate movie lookups.
+
 ## 1.1.1 - 2026-08-12
 
 ### Added

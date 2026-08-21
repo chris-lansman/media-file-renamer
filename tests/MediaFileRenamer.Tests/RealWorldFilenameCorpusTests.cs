@@ -30,6 +30,9 @@ public sealed class RealWorldFilenameCorpusTests
                 "Alien.1979.Theatrical.Cut.1080p.BluRay.x265.10bit.mkv",
                 "Movie", "Alien", 1979, null, null, null, "", "Theatrical Cut"),
             new FilenameCase(
+                "1987.Lethal.Weapon.1920x1080.BDRip.x264.DTS-HD.MA.mkv",
+                "Movie", "Lethal Weapon", 1987, null, null, null, "", ""),
+            new FilenameCase(
                 "Movie.Name.2024.Extended.Edition.AV1.mkv",
                 "Movie", "Movie Name", 2024, null, null, null, "", "Extended Edition"),
             new FilenameCase(
@@ -73,6 +76,28 @@ public sealed class RealWorldFilenameCorpusTests
                 Assert.AreEqual(episode, item.Episode, file);
             }
         }
+    }
+
+    [TestMethod]
+    public void Scan_LeadingYearMovie_AutoMatchesItsExactMovieAndYear()
+    {
+        using var temp = new TempDirectory();
+        var item = ScanSingle(temp.CreateFile(
+            "1987.Lethal.Weapon.1920x1080.BDRip.x264.DTS-HD.MA.mkv"));
+        var candidate = new TmdbCandidate(
+            941,
+            "Movie",
+            "Lethal Weapon",
+            1987,
+            "1987-03-06",
+            "",
+            "");
+
+        var match = TmdbClient.FindAutoMatch(item, [candidate], 92);
+
+        Assert.IsNotNull(match);
+        Assert.AreEqual(100, match.ConfidencePercent);
+        Assert.AreEqual(941, match.Candidate.TmdbId);
     }
 
     [TestMethod]
