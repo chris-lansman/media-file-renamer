@@ -3,6 +3,14 @@
 Notable user-visible changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/) for tagged releases.
 
+## 1.1.5 - 2026-09-07
+
+### Fixed
+
+- Movie releases with audio channel layouts such as `TrueHD.7.1` no longer get misread as date-based TV episodes.
+- Successful Move operations now clean empty nested source folders up to the folder selected by the user, while Copy operations and non-empty folders remain untouched.
+- Update checks now explain unavailable private release feeds and GitHub rate limiting instead of showing a generic error.
+
 ## 1.1.4 - 2026-08-21
 
 ### Fixed
