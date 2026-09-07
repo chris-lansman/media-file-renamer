@@ -30,7 +30,7 @@ public sealed partial class MediaScanner
             .Select(group => group.First())
             .Select(file =>
             {
-                var item = Parse(file.Path, file.GroupPath);
+                var item = Parse(file.Path, file.GroupPath, file.SourceRootPath);
                 item.CompanionPaths.AddRange(FindCompanionFiles(file.Path));
                 return item;
             })
@@ -82,7 +82,10 @@ public sealed partial class MediaScanner
     {
         if (File.Exists(path) && MediaExtensions.Contains(Path.GetExtension(path)))
         {
-            yield return new ScannedFile(path, GetGroupPath(path));
+            yield return new ScannedFile(
+                path,
+                GetGroupPath(path),
+                Path.GetDirectoryName(Path.GetFullPath(path)) ?? "");
             yield break;
         }
 
@@ -101,7 +104,7 @@ public sealed partial class MediaScanner
                      .Where(file => MediaExtensions.Contains(Path.GetExtension(file)))
                      .Where(file => !IsInsideExtraFolder(file, path)))
         {
-            yield return new ScannedFile(file, GetGroupPath(file));
+            yield return new ScannedFile(file, GetGroupPath(file), Path.GetFullPath(path));
         }
     }
 
@@ -159,7 +162,7 @@ public sealed partial class MediaScanner
             : parent;
     }
 
-    private static MediaPreviewItem Parse(string path, string groupPath)
+    private static MediaPreviewItem Parse(string path, string groupPath, string sourceRootPath)
     {
         var fileName = Path.GetFileNameWithoutExtension(path);
         var absoluteCleaned = CleanReleaseName(fileName, removeLeadingIndex: false);
@@ -186,6 +189,7 @@ public sealed partial class MediaScanner
             return new MediaPreviewItem
             {
                 SourcePath = path,
+                SourceRootPath = sourceRootPath,
                 SourceGroupPath = groupPath,
                 Extension = Path.GetExtension(path),
                 MediaType = "TV",
@@ -214,6 +218,7 @@ public sealed partial class MediaScanner
             return new MediaPreviewItem
             {
                 SourcePath = path,
+                SourceRootPath = sourceRootPath,
                 SourceGroupPath = groupPath,
                 Extension = Path.GetExtension(path),
                 MediaType = "TV",
@@ -237,6 +242,7 @@ public sealed partial class MediaScanner
             return new MediaPreviewItem
             {
                 SourcePath = path,
+                SourceRootPath = sourceRootPath,
                 SourceGroupPath = groupPath,
                 Extension = Path.GetExtension(path),
                 MediaType = "TV",
@@ -258,6 +264,7 @@ public sealed partial class MediaScanner
             return new MediaPreviewItem
             {
                 SourcePath = path,
+                SourceRootPath = sourceRootPath,
                 SourceGroupPath = groupPath,
                 Extension = Path.GetExtension(path),
                 MediaType = "TV",
@@ -276,6 +283,7 @@ public sealed partial class MediaScanner
             return new MediaPreviewItem
             {
                 SourcePath = path,
+                SourceRootPath = sourceRootPath,
                 SourceGroupPath = groupPath,
                 Extension = Path.GetExtension(path),
                 MediaType = "TV",
@@ -292,6 +300,7 @@ public sealed partial class MediaScanner
         return new MediaPreviewItem
         {
             SourcePath = path,
+            SourceRootPath = sourceRootPath,
             SourceGroupPath = groupPath,
             Extension = Path.GetExtension(path),
             MediaType = yearMatch.Success ? "Movie" : "Unknown",
@@ -443,7 +452,7 @@ public sealed partial class MediaScanner
     [GeneratedRegex(@"\b(?<year>19\d{2}|20\d{2})\b")]
     private static partial Regex YearPattern();
 
-    [GeneratedRegex(@"\b(\d{3,4}\s*x\s*\d{3,4}|480p|720p|1080p|2160p|4k\d{2,3}|4k|uhd|web[- ]?dl|webrip|bluray|b[dr]rip|dvdrip|hdrip|remux|hdr10|hdr|dolby[- ]?vision|dovi|dv|av1|10bit|8bit|x26[45]?|h26[45]|hevc|aac|dts(?:[- .]?(?:hd|x))?(?:[- .]?(?:ma|es))?|truehd|atmos|proper|repack|no[- ]?dnr|\d{2}mm)\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(\d{3,4}\s*x\s*\d{3,4}|480p|720p|1080p|2160p|4k\d{2,3}|4k|uhd|web[- ]?dl|webrip|bluray|b[dr]rip|dvdrip|hdrip|remux|hdr10|hdr|dolby[- ]?vision|dovi|dv|av1|10bit|8bit|x26[45]?|h26[45]|hevc|aac|dts(?:[- .]?(?:hd|x))?(?:[- .]?(?:ma|es))?(?:\s+\d{1,2}\s+\d)?|truehd(?:\s+\d{1,2}\s+\d)?|atmos|proper|repack|no[- ]?dnr|\d{2}mm)\b", RegexOptions.IgnoreCase)]
     private static partial Regex ReleaseNoisePattern();
 
     [GeneratedRegex(@"^\s*\d{1,3}\s*[- .]+\s*", RegexOptions.IgnoreCase)]
@@ -455,6 +464,6 @@ public sealed partial class MediaScanner
     [GeneratedRegex(@"\s+")]
     private static partial Regex SpacePattern();
 
-    private sealed record ScannedFile(string Path, string GroupPath);
+    private sealed record ScannedFile(string Path, string GroupPath, string SourceRootPath);
     private sealed record ShowFolderInfo(string Title, int? Year, bool IsExplicitTv);
 }

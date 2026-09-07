@@ -33,6 +33,9 @@ public sealed class RealWorldFilenameCorpusTests
                 "1987.Lethal.Weapon.1920x1080.BDRip.x264.DTS-HD.MA.mkv",
                 "Movie", "Lethal Weapon", 1987, null, null, null, "", ""),
             new FilenameCase(
+                "Wreck.It.Ralph.2012.2160p.BluRay.REMUX.HEVC.TrueHD.7.1.Atmos-FGT.mkv",
+                "Movie", "Wreck It Ralph", 2012, null, null, null, "", ""),
+            new FilenameCase(
                 "Movie.Name.2024.Extended.Edition.AV1.mkv",
                 "Movie", "Movie Name", 2024, null, null, null, "", "Extended Edition"),
             new FilenameCase(
