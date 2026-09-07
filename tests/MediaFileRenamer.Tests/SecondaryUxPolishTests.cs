@@ -220,6 +220,36 @@ public sealed class SecondaryUxPolishTests
                 CancellationToken.None));
     }
 
+    [TestMethod]
+    public async Task UpdateChecker_ExplainsUnavailableOrPrivateReleaseFeed()
+    {
+        using var client = new HttpClient(new StubHttpHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.NotFound)));
+
+        var exception = await Assert.ThrowsExactlyAsync<UpdateCheckException>(() =>
+            new GitHubReleaseUpdateChecker(client).CheckAsync(
+                new Version(1, 1, 4),
+                CancellationToken.None));
+
+        StringAssert.Contains(exception.UserMessage, "HTTP 404");
+        StringAssert.Contains(exception.UserMessage, "publicly readable");
+    }
+
+    [TestMethod]
+    public async Task UpdateChecker_ExplainsGitHubRateLimitRejection()
+    {
+        using var client = new HttpClient(new StubHttpHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.Forbidden)));
+
+        var exception = await Assert.ThrowsExactlyAsync<UpdateCheckException>(() =>
+            new GitHubReleaseUpdateChecker(client).CheckAsync(
+                new Version(1, 1, 4),
+                CancellationToken.None));
+
+        StringAssert.Contains(exception.UserMessage, "HTTP 403");
+        StringAssert.Contains(exception.UserMessage, "Try again later");
+    }
+
     [DataRow("v2.3.4", 2, 3, 4)]
     [DataRow("1.5.0-beta.1", 1, 5, 0)]
     [DataRow("1.5.0+build.9", 1, 5, 0)]
