@@ -19,6 +19,9 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     private string _mediaType = "Movie";
 
     public string SourcePath { get; init; } = "";
+    // The folder explicitly selected by the user (or the file's parent for Add Files).
+    // Rename cleanup never walks above this boundary.
+    public string SourceRootPath { get; init; } = "";
     public string SourceGroupPath { get; init; } = "";
     public int GroupFileCount { get; set; } = 1;
     public string SourceFileName => Path.GetFileNameWithoutExtension(SourcePath);

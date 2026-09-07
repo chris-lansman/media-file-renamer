@@ -162,10 +162,11 @@ public sealed class RenameApplier
         journal?.MarkCompleted();
         var sourceDirectories = operation == FileOperation.Move
             ? preflight.Transfers
-                .Select(transfer => Path.GetDirectoryName(transfer.SourcePath))
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .Cast<string>()
-                .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                .Select(transfer => new SourceFolderCleanupCandidate(
+                    Path.GetDirectoryName(transfer.SourcePath) ?? "",
+                    transfer.Item.SourceRootPath))
+                .Where(candidate => !string.IsNullOrWhiteSpace(candidate.SourceDirectory))
+                .ToList()
             : [];
         var deletedFolders = operation == FileOperation.Move
             ? DeleteEmptySourceFolders(sourceDirectories)
@@ -704,13 +705,14 @@ public sealed class RenameApplier
         return $"{value:0.##} {units[unit]}";
     }
 
-    private static int DeleteEmptySourceFolders(IEnumerable<string> sourceDirectories)
+    private static int DeleteEmptySourceFolders(
+        IEnumerable<SourceFolderCleanupCandidate> sourceDirectories)
     {
         var protectedDirectories = GetProtectedDirectories();
         var deleted = 0;
 
         foreach (var directory in sourceDirectories
-                     .Select(Path.GetFullPath)
+                     .SelectMany(GetCleanupDirectories)
                      .Distinct(StringComparer.OrdinalIgnoreCase)
                      .OrderByDescending(path => path.Length))
         {
@@ -748,23 +750,9 @@ public sealed class RenameApplier
                 return false;
             }
 
-            var entries = Directory.EnumerateFileSystemEntries(
-                directory,
-                "*",
-                SearchOption.AllDirectories);
-            foreach (var entry in entries)
-            {
-                var attributes = File.GetAttributes(entry);
-                if (!attributes.HasFlag(FileAttributes.Directory)
-                    || attributes.HasFlag(FileAttributes.ReparsePoint))
-                {
-                    return false;
-                }
-            }
-
             try
             {
-                Directory.Delete(directory, recursive: true);
+                DeleteEmptyDirectoryTree(directory);
                 return true;
             }
             catch (IOException) when (attempt < 3)
@@ -774,6 +762,89 @@ public sealed class RenameApplier
         }
 
         return false;
+    }
+
+    private static IEnumerable<string> GetCleanupDirectories(
+        SourceFolderCleanupCandidate candidate)
+    {
+        var sourceDirectory = Path.GetFullPath(candidate.SourceDirectory);
+        var cleanupRoot = sourceDirectory;
+        if (!string.IsNullOrWhiteSpace(candidate.SourceRootPath))
+        {
+            var requestedRoot = Path.GetFullPath(candidate.SourceRootPath);
+            if (IsSameOrChildPath(sourceDirectory, requestedRoot))
+            {
+                cleanupRoot = requestedRoot;
+            }
+        }
+
+        var current = sourceDirectory;
+        while (true)
+        {
+            yield return current;
+            if (current.Equals(cleanupRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                yield break;
+            }
+
+            var parent = Path.GetDirectoryName(current);
+            if (string.IsNullOrWhiteSpace(parent))
+            {
+                yield break;
+            }
+
+            current = parent;
+        }
+    }
+
+    private static bool IsSameOrChildPath(string path, string root)
+    {
+        if (path.Equals(root, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var rootPrefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        return path.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void DeleteEmptyDirectoryTree(string directory)
+    {
+        var emptyDirectories = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(directory);
+
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            var attributes = File.GetAttributes(current);
+            if (!attributes.HasFlag(FileAttributes.Directory)
+                || attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                throw new IOException("The source folder is not a regular empty directory.");
+            }
+
+            emptyDirectories.Add(current);
+            foreach (var entry in Directory.EnumerateFileSystemEntries(current))
+            {
+                var entryAttributes = File.GetAttributes(entry);
+                if (!entryAttributes.HasFlag(FileAttributes.Directory)
+                    || entryAttributes.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    throw new IOException("The source folder is not empty.");
+                }
+
+                pending.Push(entry);
+            }
+        }
+
+        // Never use recursive deletion here. Each delete fails if anything appeared
+        // after the inspection, so a race cannot remove a newly created file.
+        foreach (var emptyDirectory in emptyDirectories.OrderByDescending(path => path.Length))
+        {
+            Directory.Delete(emptyDirectory, recursive: false);
+        }
     }
 
     private static HashSet<string> GetProtectedDirectories()
@@ -813,6 +884,10 @@ public sealed class RenameApplier
         string DestinationPath,
         bool IsCompanion,
         long Length);
+
+    private sealed record SourceFolderCleanupCandidate(
+        string SourceDirectory,
+        string SourceRootPath);
 
     private sealed record FileMetadataSnapshot(
         DateTime? CreationTimeUtc,

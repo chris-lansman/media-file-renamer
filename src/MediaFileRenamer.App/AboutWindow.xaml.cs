@@ -101,6 +101,11 @@ public partial class AboutWindow : Window
                 _updateCancellation.Token);
             ApplyUpdateResult(result);
         }
+        catch (UpdateCheckException ex)
+        {
+            DiagnosticLog.Current.Error("Could not check for updates.", ex);
+            UpdateStatusTextBlock.Text = ex.UserMessage;
+        }
         catch (OperationCanceledException)
         {
             UpdateStatusTextBlock.Text =
@@ -270,6 +275,21 @@ internal interface IUpdateChecker
         CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Represents a GitHub update-feed failure with a message that is safe and
+/// actionable to display directly in the desktop UI.
+/// </summary>
+internal sealed class UpdateCheckException : InvalidOperationException
+{
+    public UpdateCheckException(string userMessage)
+        : base(userMessage)
+    {
+        UserMessage = userMessage;
+    }
+
+    public string UserMessage { get; }
+}
+
 internal sealed class GitHubReleaseUpdateChecker : IUpdateChecker
 {
     internal const string LatestReleaseApiUrl =
@@ -296,7 +316,7 @@ internal sealed class GitHubReleaseUpdateChecker : IUpdateChecker
             request,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
-        response.EnsureSuccessStatusCode();
+        EnsureReleaseFeedAvailable(response);
         await using var content = await response.Content.ReadAsStreamAsync(
             cancellationToken);
         using var document = await JsonDocument.ParseAsync(
@@ -409,6 +429,27 @@ internal sealed class GitHubReleaseUpdateChecker : IUpdateChecker
             Math.Max(0, version.Major),
             Math.Max(0, version.Minor),
             Math.Max(0, version.Build));
+
+    private static void EnsureReleaseFeedAvailable(HttpResponseMessage response)
+    {
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            throw new UpdateCheckException(
+                "The configured GitHub Releases feed returned HTTP 404. "
+                + "Automatic updates require a publicly readable release feed; "
+                + "open the release page or ask the app owner to publish one.");
+        }
+
+        if (response.StatusCode is System.Net.HttpStatusCode.Forbidden
+            or System.Net.HttpStatusCode.TooManyRequests)
+        {
+            throw new UpdateCheckException(
+                $"GitHub temporarily rejected the update check (HTTP {(int)response.StatusCode}). "
+                + "Try again later or open the release page.");
+        }
+
+        response.EnsureSuccessStatusCode();
+    }
 
     private static HttpClient CreateClient() => new()
     {

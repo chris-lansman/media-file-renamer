@@ -861,6 +861,26 @@ public sealed class RenameApplierTests
     }
 
     [TestMethod]
+    public void Move_CleansEmptyAncestorsUpToSelectedSourceFolder()
+    {
+        using var temp = new TempDirectory();
+        var selectedFolder = temp.CreateDirectory("Wreck It Ralph");
+        var nestedFolder = temp.CreateDirectory(Path.Combine("Wreck It Ralph", "BDMV", "STREAM"));
+        var source = temp.CreateFile(Path.Combine(nestedFolder, "00001.m2ts"), "test");
+
+        var result = new RenameApplier().Apply(
+            [Item(
+                source,
+                Path.Combine(temp.Path, "Output", "Wreck It Ralph.m2ts"),
+                selectedFolder)],
+            FileOperation.Move);
+
+        Assert.IsFalse(Directory.Exists(selectedFolder));
+        Assert.IsTrue(File.Exists(Path.Combine(temp.Path, "Output", "Wreck It Ralph.m2ts")));
+        Assert.AreEqual(3, result.DeletedSourceFolders);
+    }
+
+    [TestMethod]
     public void Copy_PreservesSourceFile()
     {
         using var temp = new TempDirectory();
@@ -872,6 +892,25 @@ public sealed class RenameApplierTests
         Assert.IsTrue(File.Exists(source));
         Assert.IsTrue(File.Exists(destination));
         Assert.AreEqual(1, result.CompletedItems.Count);
+    }
+
+    [TestMethod]
+    public void Copy_LeavesAnOtherwiseEmptySelectedSourceFolderInPlace()
+    {
+        using var temp = new TempDirectory();
+        var sourceFolder = temp.CreateDirectory("Source Movie");
+        temp.CreateDirectory(Path.Combine("Source Movie", "Empty", "Nested"));
+        var source = temp.CreateFile(Path.Combine(sourceFolder, "Movie.mkv"), "test");
+        var destination = Path.Combine(temp.Path, "Output", "Movie.mkv");
+
+        var result = new RenameApplier().Apply(
+            [Item(source, destination, sourceFolder)],
+            FileOperation.Copy);
+
+        Assert.IsTrue(Directory.Exists(sourceFolder));
+        Assert.IsTrue(File.Exists(source));
+        Assert.IsTrue(File.Exists(destination));
+        Assert.AreEqual(0, result.DeletedSourceFolders);
     }
 
     [TestMethod]
@@ -982,15 +1021,19 @@ public sealed class RenameApplierTests
         Assert.IsTrue(File.Exists(manualItem.DestinationPath));
     }
 
-    private static MediaPreviewItem Item(string source, string destination) => new()
-    {
-        SourcePath = source,
-        Extension = ".mkv",
-        MediaType = "Movie",
-        MatchedTitle = "Movie",
-        DestinationPath = destination,
-        Status = "TMDB match"
-    };
+    private static MediaPreviewItem Item(
+        string source,
+        string destination,
+        string sourceRootPath = "") => new()
+        {
+            SourcePath = source,
+            SourceRootPath = sourceRootPath,
+            Extension = ".mkv",
+            MediaType = "Movie",
+            MatchedTitle = "Movie",
+            DestinationPath = destination,
+            Status = "TMDB match"
+        };
 }
 
 internal sealed class TempDirectory : IDisposable
