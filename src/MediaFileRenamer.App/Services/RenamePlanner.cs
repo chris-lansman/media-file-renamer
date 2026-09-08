@@ -85,12 +85,15 @@ public sealed class RenamePlanner
         var editionTag = string.IsNullOrWhiteSpace(item.Edition)
             ? ""
             : $" {{edition-{Sanitize(item.Edition)}}}";
-        var displayName = $"{title}{year}{idTag}{editionTag}";
-        var fileName = $"{displayName}{extension}";
+        // Plex uses the provider ID to disambiguate the movie folder. Keep that
+        // machine-facing metadata out of the media filename, which should remain
+        // the clean, human-readable title and release year by default.
+        var folderName = $"{title}{year}{idTag}{editionTag}";
+        var fileName = $"{title}{year}{editionTag}{extension}";
 
         return preset == RenamePreset.FlatReview
             ? Path.Combine("Movies", fileName)
-            : Path.Combine("Movies", displayName, fileName);
+            : Path.Combine("Movies", folderName, fileName);
     }
 
     private static string BuildTvPath(MediaPreviewItem item, string title, string extension, RenamePreset preset)
