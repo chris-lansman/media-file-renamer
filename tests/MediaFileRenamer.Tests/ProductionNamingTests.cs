@@ -52,7 +52,7 @@ public sealed class ProductionNamingTests
 
         StringAssert.Contains(
             destination,
-            @"Movies\Blade Runner (1982) {tmdb-78} {edition-Director's Cut}\Blade Runner (1982) {tmdb-78} {edition-Director's Cut}.mkv");
+            @"Movies\Blade Runner (1982) {tmdb-78} {edition-Director's Cut}\Blade Runner (1982) {edition-Director's Cut}.mkv");
     }
 
     [TestMethod]

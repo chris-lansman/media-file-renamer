@@ -736,7 +736,7 @@ public sealed class TvdbFallbackTests
 public sealed class RenamePlannerTests
 {
     [TestMethod]
-    public void PlexMoviePath_IncludesTmdbId()
+    public void PlexMoviePath_KeepsTmdbIdInTheFolderOnly()
     {
         var destination = new RenamePlanner().BuildDestination(
             Movie("Star Wars", 1977, 11),
@@ -744,7 +744,7 @@ public sealed class RenamePlannerTests
             RenamePreset.PlexStandard);
 
         Assert.AreEqual(
-            @"C:\Output\Movies\Star Wars (1977) {tmdb-11}\Star Wars (1977) {tmdb-11}.mkv",
+            @"C:\Output\Movies\Star Wars (1977) {tmdb-11}\Star Wars (1977).mkv",
             destination);
     }
 
