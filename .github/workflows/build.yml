@@ -159,6 +159,10 @@ jobs:
         shell: pwsh
         run: ./.github/scripts/Test-PublishedApp.ps1 -ExecutablePath publish/MediaFileRenamer.exe
 
+      - name: Verify portable update handoff
+        shell: pwsh
+        run: ./.github/scripts/Test-UpdateHandoff.ps1 -ExecutablePath publish/MediaFileRenamer.exe
+
       - name: Create ZIP and SHA-256 checksum
         shell: pwsh
         run: |
