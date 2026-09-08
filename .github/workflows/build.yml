@@ -76,7 +76,7 @@ jobs:
           name: test-results-${{ github.run_id }}
           path: TestResults/*.trx
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 2
 
   package:
     name: Package Windows x64
@@ -193,7 +193,9 @@ jobs:
             MediaFileRenamer-win-x64.zip
             MediaFileRenamer-win-x64.zip.sha256
           if-no-files-found: error
-          retention-days: 30
+          # This package is only the handoff between the package and release jobs.
+          # The permanent user download is the GitHub Release asset.
+          retention-days: 1
           compression-level: 0
 
   release:
