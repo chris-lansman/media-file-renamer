@@ -3,6 +3,17 @@
 Notable user-visible changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/) for tagged releases.
 
+## 1.1.6 - 2026-09-08
+
+### Fixed
+
+- The portable updater no longer deadlocks while verifying the downloaded package after the app closes.
+- The app now waits for the post-exit helper to confirm it is ready before closing. If a later install step fails, it relaunches the existing version and displays the specific result instead of failing silently.
+
+### Changed
+
+- Release packaging now exercises the real self-contained update helper, file replacement, and relaunch path before publishing an asset.
+
 ## 1.1.5 - 2026-09-07
 
 ### Fixed
