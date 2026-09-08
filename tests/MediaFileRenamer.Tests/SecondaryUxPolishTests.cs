@@ -342,6 +342,78 @@ public sealed class SecondaryUxPolishTests
     }
 
     [TestMethod]
+    public void UpdateInstaller_ReportsProgressWhileApplyingAVerifiedPackage()
+    {
+        using var temp = new TempDirectory();
+        var installationDirectory = temp.CreateDirectory("Installed app");
+        var sessionDirectory = temp.CreateDirectory("Update session");
+        File.WriteAllText(
+            Path.Combine(installationDirectory, "MediaFileRenamer.exe"),
+            "old executable");
+
+        var packagePath = Path.Combine(sessionDirectory, "MediaFileRenamer-win-x64.zip");
+        using (var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+        using (var writer = new StreamWriter(
+                   archive.CreateEntry("MediaFileRenamer.exe").Open()))
+        {
+            writer.Write("new executable");
+        }
+
+        var planPath = Path.Combine(sessionDirectory, "update-plan.json");
+        File.WriteAllText(planPath, JsonSerializer.Serialize(new UpdateLaunchPlan(
+            ParentProcessId: 0,
+            InstallationDirectory: installationDirectory,
+            PackagePath: packagePath,
+            ExpectedSha256: Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(packagePath))),
+            RelaunchArguments: [])));
+        var reporter = new UpdateInstallService.UpdateStatusReporter(
+            UpdateInstallService.GetStatusPath(planPath));
+
+        UpdateInstallService.ApplyUpdatePlan(planPath, restartApplication: false, reporter);
+
+        Assert.IsTrue(UpdateInstallService.TryReadStatus(reporter.StatusPath, out var status));
+        Assert.IsNotNull(status);
+        Assert.AreEqual("installing-update", status.Stage);
+        Assert.IsFalse(status.IsTerminal);
+    }
+
+    [TestMethod]
+    public void UpdateInstaller_RemovesOnlyAValidUpdateResultArgument()
+    {
+        var sessionDirectory = Path.Combine(
+            UpdateInstallService.SessionRoot,
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sessionDirectory);
+        try
+        {
+            var statusPath = Path.Combine(sessionDirectory, "update-status.json");
+            File.WriteAllText(statusPath, JsonSerializer.Serialize(new UpdateInstallStatus(
+                "restarting-application",
+                IsTerminal: true,
+                Succeeded: true,
+                Message: "The update was installed successfully.")));
+
+            var remaining = UpdateInstallService.RemoveUpdateResultArgument(
+                ["--data-root", "C:\\test-data", "--show-update-result", statusPath, "movie.mkv"],
+                out var outcome);
+
+            CollectionAssert.AreEqual(
+                new[] { "--data-root", "C:\\test-data", "movie.mkv" },
+                remaining.ToArray());
+            Assert.IsNotNull(outcome);
+            Assert.IsTrue(outcome.Succeeded);
+            Assert.AreEqual("The update was installed successfully.", outcome.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(sessionDirectory))
+            {
+                Directory.Delete(sessionDirectory, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
     public void UpdateInstaller_CopiesTheRuntimeRequiredByItsHelper()
     {
         using var temp = new TempDirectory();

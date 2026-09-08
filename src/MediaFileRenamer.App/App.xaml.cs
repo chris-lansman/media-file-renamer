@@ -42,9 +42,13 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        var startupArguments = UpdateInstallService.RemoveUpdateResultArgument(
+            e.Args,
+            out var updateOutcome);
+
         try
         {
-            var options = AppStartupOptions.Parse(e.Args);
+            var options = AppStartupOptions.Parse(startupArguments);
             if (options.DataPaths is not null)
             {
                 AppDataPaths.Configure(options.DataPaths);
@@ -65,6 +69,18 @@ public partial class App : System.Windows.Application
         UpdateInstallService.CleanupStaleSessions();
         DiagnosticLog.Current.Information("Application starting.");
         base.OnStartup(e);
+        if (updateOutcome is not null)
+        {
+            _ = Dispatcher.BeginInvoke(() => System.Windows.MessageBox.Show(
+                updateOutcome.Message,
+                updateOutcome.Succeeded
+                    ? "Update installed"
+                    : "Update could not be installed",
+                MessageBoxButton.OK,
+                updateOutcome.Succeeded
+                    ? MessageBoxImage.Information
+                    : MessageBoxImage.Error));
+        }
         _ = OfferAvailableUpdateAsync();
     }
 

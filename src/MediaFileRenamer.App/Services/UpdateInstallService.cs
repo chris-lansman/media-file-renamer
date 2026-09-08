@@ -25,6 +25,14 @@ internal sealed record UpdateLaunchPlan(
     string ExpectedSha256,
     IReadOnlyList<string> RelaunchArguments);
 
+internal sealed record UpdateInstallStatus(
+    string Stage,
+    bool IsTerminal,
+    bool Succeeded,
+    string? Message);
+
+internal sealed record UpdateInstallOutcome(bool Succeeded, string Message);
+
 internal sealed class UpdateDownloadService
 {
     internal const string PackageAssetName = "MediaFileRenamer-win-x64.zip";
@@ -100,6 +108,11 @@ internal sealed class UpdateDownloadService
             {
                 throw new InvalidOperationException("The update helper could not be started.");
             }
+
+            await WaitForHelperReadyAsync(
+                helper,
+                UpdateInstallService.GetStatusPath(planPath),
+                cancellationToken);
         }
         catch
         {
@@ -143,6 +156,19 @@ internal sealed class UpdateDownloadService
         await using var stream = File.OpenRead(packagePath);
         var actual = Convert.ToHexString(
             await SHA256.HashDataAsync(stream, cancellationToken));
+        VerifyCalculatedChecksum(actual, expectedChecksum);
+    }
+
+    internal static void VerifyChecksum(string packagePath, string expectedChecksum)
+    {
+        using var stream = File.OpenRead(packagePath);
+        VerifyCalculatedChecksum(
+            Convert.ToHexString(SHA256.HashData(stream)),
+            expectedChecksum);
+    }
+
+    private static void VerifyCalculatedChecksum(string actual, string expectedChecksum)
+    {
         if (!string.Equals(actual, expectedChecksum, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
@@ -289,12 +315,56 @@ internal sealed class UpdateDownloadService
             // A partial download is harmless and is cleaned up on a later startup.
         }
     }
+
+    private static async Task WaitForHelperReadyAsync(
+        Process helper,
+        string statusPath,
+        CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (UpdateInstallService.TryReadStatus(statusPath, out var status)
+                && status is not null)
+            {
+                if (string.Equals(
+                        status.Stage,
+                        UpdateInstallService.WaitingForParentStage,
+                        StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                if (status.IsTerminal)
+                {
+                    throw new InvalidOperationException(
+                        status.Message
+                        ?? "The update helper could not prepare the installation.");
+                }
+            }
+
+            if (helper.HasExited)
+            {
+                throw new InvalidOperationException(
+                    "The update helper stopped before it could prepare the installation.");
+            }
+
+            await Task.Delay(50, cancellationToken);
+        }
+
+        throw new InvalidOperationException(
+            "The update helper did not confirm that it was ready. The current version is still open.");
+    }
 }
 
 internal static class UpdateInstallService
 {
     private const string ApplyUpdateOption = "--apply-update-plan";
+    private const string UpdateResultOption = "--show-update-result";
     private const string ApplicationExecutableName = "MediaFileRenamer.exe";
+    private const string StatusFileName = "update-status.json";
+    internal const string WaitingForParentStage = "waiting-for-parent";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -304,6 +374,19 @@ internal static class UpdateInstallService
         Path.GetTempPath(),
         "MediaFileRenamer",
         "updates");
+
+    internal static string GetStatusPath(string planPath)
+    {
+        var sessionDirectory = Path.GetDirectoryName(planPath);
+        if (string.IsNullOrWhiteSpace(sessionDirectory))
+        {
+            throw new ArgumentException(
+                "The update plan has no session directory.",
+                nameof(planPath));
+        }
+
+        return Path.Combine(sessionDirectory, StatusFileName);
+    }
 
     public static bool TryApplyFromArguments(
         IReadOnlyList<string> arguments,
@@ -332,27 +415,28 @@ internal static class UpdateInstallService
             return true;
         }
 
+        var planPath = arguments[matchingIndexes[0] + 1];
+        var reporter = new UpdateStatusReporter(GetStatusPath(planPath));
+        reporter.Write("helper-started");
         try
         {
-            ApplyUpdatePlan(arguments[matchingIndexes[0] + 1], restartApplication: true);
+            ApplyUpdatePlan(planPath, restartApplication: true, reporter);
         }
-        catch (Exception ex) when (
-            ex is ArgumentException
-                or InvalidOperationException
-                or InvalidDataException
-                or IOException
-                or UnauthorizedAccessException
-                or JsonException
-                or CryptographicException)
+        catch (Exception ex)
         {
             failureMessage = "The update could not be installed. Your current version was left in place. "
                 + ex.Message;
+            reporter.Write("failed", isTerminal: true, succeeded: false, failureMessage);
+            TryRestartPreviousApplication(planPath, reporter.StatusPath);
         }
 
         return true;
     }
 
-    internal static void ApplyUpdatePlan(string planPath, bool restartApplication)
+    internal static void ApplyUpdatePlan(
+        string planPath,
+        bool restartApplication,
+        UpdateStatusReporter? reporter = null)
     {
         if (string.IsNullOrWhiteSpace(planPath)
             || !Path.IsPathFullyQualified(planPath)
@@ -366,37 +450,26 @@ internal static class UpdateInstallService
             JsonOptions)
             ?? throw new InvalidOperationException("The update plan could not be read.");
         ValidatePlan(plan);
+        reporter?.Write(WaitingForParentStage);
         WaitForParentExit(plan.ParentProcessId);
-        UpdateDownloadService.VerifyChecksumAsync(
-            plan.PackagePath,
-            plan.ExpectedSha256,
-            CancellationToken.None).GetAwaiter().GetResult();
+        reporter?.Write("verifying-package");
+        // This runs on the WPF helper's startup thread. Do not block that thread on an
+        // async operation, because its continuation would need the same dispatcher.
+        UpdateDownloadService.VerifyChecksum(plan.PackagePath, plan.ExpectedSha256);
 
         var sessionDirectory = Path.GetDirectoryName(planPath)
             ?? throw new InvalidOperationException("The update plan has no session directory.");
         var stagingDirectory = Path.Combine(sessionDirectory, "staged-update");
+        reporter?.Write("extracting-package");
         ExtractPackage(plan.PackagePath, stagingDirectory);
+        reporter?.Write("installing-update");
         ApplyStagedFiles(stagingDirectory, plan.InstallationDirectory);
 
         if (restartApplication)
         {
-            var executablePath = Path.Combine(
-                plan.InstallationDirectory,
-                ApplicationExecutableName);
-            var startInfo = new ProcessStartInfo(executablePath)
-            {
-                UseShellExecute = false,
-                WorkingDirectory = plan.InstallationDirectory
-            };
-            foreach (var argument in plan.RelaunchArguments)
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
-
-            if (Process.Start(startInfo) is null)
-            {
-                throw new InvalidOperationException("The updated application could not be restarted.");
-            }
+            reporter?.Write("restarting-application", isTerminal: true, succeeded: true,
+                "The update was installed successfully.");
+            StartApplication(plan, reporter?.StatusPath);
         }
     }
 
@@ -441,6 +514,33 @@ internal static class UpdateInstallService
         }
     }
 
+    internal static IReadOnlyList<string> RemoveUpdateResultArgument(
+        IReadOnlyList<string> arguments,
+        out UpdateInstallOutcome? outcome)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        outcome = null;
+        var remaining = new List<string>(arguments.Count);
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            if (!string.Equals(arguments[index], UpdateResultOption, StringComparison.OrdinalIgnoreCase))
+            {
+                remaining.Add(arguments[index]);
+                continue;
+            }
+
+            if (index + 1 < arguments.Count
+                && TryReadOutcome(arguments[index + 1], out var readOutcome))
+            {
+                outcome = readOutcome;
+            }
+
+            index++;
+        }
+
+        return remaining;
+    }
+
     private static void ValidatePlan(UpdateLaunchPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -455,6 +555,106 @@ internal static class UpdateInstallService
         {
             throw new InvalidOperationException("The update plan contains unsafe paths or values.");
         }
+    }
+
+    private static void StartApplication(UpdateLaunchPlan plan, string? statusPath)
+    {
+        var executablePath = Path.Combine(
+            plan.InstallationDirectory,
+            ApplicationExecutableName);
+        var startInfo = new ProcessStartInfo(executablePath)
+        {
+            UseShellExecute = false,
+            WorkingDirectory = plan.InstallationDirectory
+        };
+        foreach (var argument in plan.RelaunchArguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        if (!string.IsNullOrWhiteSpace(statusPath))
+        {
+            startInfo.ArgumentList.Add(UpdateResultOption);
+            startInfo.ArgumentList.Add(statusPath);
+        }
+
+        if (Process.Start(startInfo) is null)
+        {
+            throw new InvalidOperationException("The updated application could not be restarted.");
+        }
+    }
+
+    private static void TryRestartPreviousApplication(string planPath, string statusPath)
+    {
+        try
+        {
+            var plan = JsonSerializer.Deserialize<UpdateLaunchPlan>(
+                File.ReadAllText(planPath),
+                JsonOptions);
+            if (plan is not null)
+            {
+                ValidatePlan(plan);
+                StartApplication(plan, statusPath);
+            }
+        }
+        catch
+        {
+            // The status file remains in the update session for diagnosis if relaunching fails.
+        }
+    }
+
+    private static bool TryReadOutcome(string statusPath, out UpdateInstallOutcome? outcome)
+    {
+        outcome = null;
+        if (!IsPathInSessionRoot(statusPath)
+            || !TryReadStatus(statusPath, out var status)
+            || status is null
+            || !status.IsTerminal)
+        {
+            return false;
+        }
+
+        outcome = new UpdateInstallOutcome(
+            status.Succeeded,
+            status.Message ?? (status.Succeeded
+                ? "The update was installed successfully."
+                : "The update could not be installed. Your previous version is still installed."));
+        return true;
+    }
+
+    internal static bool TryReadStatus(string statusPath, out UpdateInstallStatus? status)
+    {
+        status = null;
+        try
+        {
+            if (!File.Exists(statusPath))
+            {
+                return false;
+            }
+
+            status = JsonSerializer.Deserialize<UpdateInstallStatus>(
+                File.ReadAllText(statusPath),
+                JsonOptions);
+            return status is not null && !string.IsNullOrWhiteSpace(status.Stage);
+        }
+        catch (Exception ex) when (ex is IOException or JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsPathInSessionRoot(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
+        {
+            return false;
+        }
+
+        var root = Path.GetFullPath(SessionRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var fullPath = Path.GetFullPath(path);
+        return fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void WaitForParentExit(int parentProcessId)
@@ -564,4 +764,44 @@ internal static class UpdateInstallService
     }
 
     private sealed record FileChange(string TargetPath, string BackupPath, bool Existed);
+
+    internal sealed class UpdateStatusReporter
+    {
+        public UpdateStatusReporter(string statusPath)
+        {
+            StatusPath = statusPath;
+        }
+
+        public string StatusPath { get; }
+
+        public void Write(
+            string stage,
+            bool isTerminal = false,
+            bool succeeded = false,
+            string? message = null)
+        {
+            var directory = Path.GetDirectoryName(StatusPath)
+                ?? throw new InvalidOperationException("The update status file has no directory.");
+            Directory.CreateDirectory(directory);
+            var temporaryPath = StatusPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(
+                    temporaryPath,
+                    JsonSerializer.Serialize(new UpdateInstallStatus(
+                        stage,
+                        isTerminal,
+                        succeeded,
+                        message)));
+                File.Move(temporaryPath, StatusPath, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath))
+                {
+                    File.Delete(temporaryPath);
+                }
+            }
+        }
+    }
 }
