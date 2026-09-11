@@ -69,6 +69,15 @@ public sealed class RenameApplier
                 Path.GetFullPath(item.DestinationPath),
                 StringComparison.OrdinalIgnoreCase))
             .ToList();
+        if (operation == FileOperation.Move && _journals is not null)
+        {
+            foreach (var transfer in preflight.Transfers.Where(transfer =>
+                         IsSameVolume(transfer.SourcePath, transfer.DestinationPath)))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                transfer.SourceIdentity = FileIdentity.TryRead(transfer.SourcePath);
+            }
+        }
         var journal = _journals?.Create(operation, preflight.Transfers);
         var completedTransfers = new List<PlannedTransfer>();
         var totalBytes = preflight.Transfers.Sum(transfer => transfer.Length);
@@ -82,10 +91,17 @@ public sealed class RenameApplier
                 var transfer = preflight.Transfers[index];
                 journal?.MarkInProgress(transfer.SourcePath, transfer.DestinationPath);
 
+                var lastProgress = Environment.TickCount64 - 100;
                 var transferProgress = progress is null
                     ? null
                     : new InlineProgress<long>(current =>
                     {
+                        var now = Environment.TickCount64;
+                        if (now - lastProgress < 100)
+                        {
+                            return;
+                        }
+                        lastProgress = now;
                         progress.Report(new FileTransferProgress(
                             index,
                             preflight.Transfers.Count,
@@ -425,6 +441,14 @@ public sealed class RenameApplier
             {
                 File.Move(transfer.SourcePath, transfer.DestinationPath);
                 progress?.Report(transfer.Length);
+                if (transfer.SourceIdentity is not null)
+                {
+                    if (FileIdentity.TryRead(transfer.DestinationPath) != transfer.SourceIdentity)
+                    {
+                        throw new IOException("The moved file identity could not be verified.");
+                    }
+                    return null;
+                }
                 return captureFingerprint
                     ? ComputeSha256(transfer.DestinationPath)
                     : null;
@@ -593,6 +617,11 @@ public sealed class RenameApplier
                 }
                 else if (destinationState == FilePathState.Exists)
                 {
+                    if (transfer.SourceIdentity is not null
+                        && FileIdentity.TryRead(transfer.DestinationPath) != transfer.SourceIdentity)
+                    {
+                        throw new IOException("Cannot restore a destination with a different or unavailable file identity.");
+                    }
                     var sourceState =
                         pathAvailabilityProbe.GetFileState(transfer.SourcePath);
                     if (sourceState is FilePathState.Unavailable
@@ -904,7 +933,10 @@ public sealed class RenameApplier
         string SourcePath,
         string DestinationPath,
         bool IsCompanion,
-        long Length);
+        long Length)
+    {
+        public string? SourceIdentity { get; set; }
+    }
 
     private sealed record SourceFolderCleanupCandidate(
         string SourceDirectory,

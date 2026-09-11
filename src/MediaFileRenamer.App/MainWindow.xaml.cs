@@ -478,10 +478,12 @@ public partial class MainWindow : Window
         }
 
         var companionCount = PreviewItems.Sum(item => item.CompanionCount);
-        var totalBytes = PreviewItems
+        var sourcePaths = PreviewItems
             .SelectMany(item => new[] { item.SourcePath }.Concat(item.CompanionPaths))
+            .ToArray();
+        var totalBytes = await Task.Run(() => sourcePaths
             .Where(File.Exists)
-            .Sum(path => new FileInfo(path).Length);
+            .Sum(path => new FileInfo(path).Length));
         var confirmation = System.Windows.MessageBox.Show(
             this,
             $"{operation} {PreviewItems.Count} media file(s)"
@@ -498,21 +500,35 @@ public partial class MainWindow : Window
         }
 
         StatusTextBlock.Text = "Preflighting staged operation...";
-        OperationProgressBar.IsIndeterminate = false;
+        OperationProgressBar.IsIndeterminate = true;
         OperationProgressBar.Value = 0;
         var transferProgress = new Progress<FileTransferProgress>(value =>
         {
+            OperationProgressBar.IsIndeterminate = false;
             OperationProgressBar.Value = value.TotalBytes == 0
                 ? 0
                 : Math.Clamp(value.BytesTransferred * 100d / value.TotalBytes, 0, 100);
             StatusTextBlock.Text =
                 $"{operation}: {value.CompletedFiles}/{value.TotalFiles} files · {value.CurrentFile}";
         });
-        var result = await _applier.ApplyAsync(
-            PreviewItems,
+        var originalItems = PreviewItems.ToArray();
+        var snapshots = originalItems.Select(item => item.CreateTransferSnapshot()).ToArray();
+        var cancellationToken = _operationCancellation?.Token ?? CancellationToken.None;
+        var result = await Task.Run(() => _applier.ApplyAsync(
+            snapshots,
             operation,
             transferProgress,
-            _operationCancellation?.Token ?? CancellationToken.None);
+            cancellationToken));
+        for (var index = 0; index < originalItems.Length; index++)
+        {
+            originalItems[index].Status = snapshots[index].Status;
+        }
+        result = result with
+        {
+            CompletedItems = result.CompletedItems
+                .Select(item => originalItems[Array.IndexOf(snapshots, item)])
+                .ToArray()
+        };
 
         if (!string.IsNullOrWhiteSpace(result.FailureMessage))
         {
@@ -611,6 +627,7 @@ public partial class MainWindow : Window
         RetryUnresolvedButton.IsEnabled = enabled;
         RenameButton.IsEnabled = enabled;
         ReviewGuidancePanel.IsEnabled = enabled;
+        SelectedFileEditor.IsEnabled = enabled;
     }
 
     private void UpdateActionState()
@@ -657,6 +674,7 @@ public partial class MainWindow : Window
         EmptyDropPanel.Visibility = hasItems ? Visibility.Collapsed : Visibility.Visible;
         SelectedFileEditor.Visibility = hasSelection ? Visibility.Visible : Visibility.Collapsed;
         ReviewGuidancePanel.IsEnabled = true;
+        SelectedFileEditor.IsEnabled = true;
         var canBrowseEpisodes = selectedItem?.MediaType == "TV"
             && (selectedItem.TmdbId is not null || selectedItem.TvdbId is not null)
             && _settings.UseTmdbLookup
@@ -1043,6 +1061,10 @@ public partial class MainWindow : Window
 
     private async Task AddSourcesAndMatchAsync(IEnumerable<string> paths)
     {
+        if (_isBusy)
+        {
+            return;
+        }
         var addedItems = AddSources(paths);
         if (addedItems.Count == 0)
         {

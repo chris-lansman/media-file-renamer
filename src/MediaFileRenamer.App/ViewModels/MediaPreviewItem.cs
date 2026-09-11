@@ -6,6 +6,13 @@ namespace MediaFileRenamer.App.ViewModels;
 
 public sealed class MediaPreviewItem : INotifyPropertyChanged
 {
+    internal MediaPreviewItem CreateTransferSnapshot()
+    {
+        var snapshot = (MediaPreviewItem)MemberwiseClone();
+        snapshot.PropertyChanged = null;
+        return snapshot;
+    }
+
     private string _matchedTitle = "";
     private string _destinationPath = "";
     private string _status = "";
