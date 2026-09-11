@@ -167,6 +167,16 @@ public sealed class TmdbClient
             .OrderByDescending(candidate => candidate.ConfidencePercent)
             .ToList();
 
+        return SelectAutoMatch(scored, confidenceThreshold);
+    }
+
+    internal static TmdbAutoMatch? SelectAutoMatch(
+        IReadOnlyList<TmdbAutoMatch> scoredCandidates,
+        int confidenceThreshold)
+    {
+        var scored = scoredCandidates
+            .OrderByDescending(candidate => candidate.ConfidencePercent)
+            .ToList();
         if (scored.Count == 0)
         {
             return null;
@@ -174,7 +184,10 @@ public sealed class TmdbClient
 
         var best = scored[0];
         var runnerUp = scored.Count > 1 ? scored[1] : null;
-        if (best.ConfidencePercent < confidenceThreshold)
+        var requiredConfidence = scored.Count == 1
+            ? Math.Min(confidenceThreshold, 80)
+            : confidenceThreshold;
+        if (best.ConfidencePercent < requiredConfidence)
         {
             return null;
         }
