@@ -3,6 +3,14 @@
 Notable user-visible changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/) for tagged releases.
 
+## 1.1.10 - 2026-09-10
+
+### Changed
+
+- Same-volume moves use Windows file identity instead of reading the entire media file for a SHA-256 fingerprint. Undo restores the name of the same file, including after content edits, and refuses replacement files or occupied original paths.
+- File identity is saved before moving so interrupted-operation recovery can verify the file without reading its contents. Filesystems without usable identity information retain the fingerprint fallback; older journals remain supported.
+- Rename preflight, disk operations, cleanup, and Undo run off the UI thread. UI-bound rows are updated on the UI thread after the operation, and copy progress updates are throttled to keep the window responsive.
+
 ## 1.1.9 - 2026-09-10
 
 ### Added
