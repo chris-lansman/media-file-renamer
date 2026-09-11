@@ -168,14 +168,16 @@ public sealed class RenameApplier
                 .Where(candidate => !string.IsNullOrWhiteSpace(candidate.SourceDirectory))
                 .ToList()
             : [];
+        var cleanupWarnings = new List<string>();
         var deletedFolders = operation == FileOperation.Move
-            ? DeleteEmptySourceFolders(sourceDirectories)
+            ? DeleteEmptySourceFolders(sourceDirectories, cleanupWarnings)
             : 0;
 
         return new RenameResult(
             deletedFolders,
             itemList,
-            journal?.Path);
+            journal?.Path)
+        { CleanupWarnings = cleanupWarnings };
     }
 
     private BatchPreflight Preflight(
@@ -706,7 +708,8 @@ public sealed class RenameApplier
     }
 
     private static int DeleteEmptySourceFolders(
-        IEnumerable<SourceFolderCleanupCandidate> sourceDirectories)
+        IEnumerable<SourceFolderCleanupCandidate> sourceDirectories,
+        List<string> warnings)
     {
         var protectedDirectories = GetProtectedDirectories();
         var deleted = 0;
@@ -728,13 +731,13 @@ public sealed class RenameApplier
                     deleted++;
                 }
             }
-            catch (IOException)
+            catch (IOException ex)
             {
-                // The move succeeded; leave a locked source folder for inspection.
+                warnings.Add($"{directory}: {ex.Message}");
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException ex)
             {
-                // The move succeeded; never fail the batch over folder cleanup permissions.
+                warnings.Add($"{directory}: {ex.Message}");
             }
         }
 
@@ -767,11 +770,11 @@ public sealed class RenameApplier
     private static IEnumerable<string> GetCleanupDirectories(
         SourceFolderCleanupCandidate candidate)
     {
-        var sourceDirectory = Path.GetFullPath(candidate.SourceDirectory);
+        var sourceDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate.SourceDirectory));
         var cleanupRoot = sourceDirectory;
         if (!string.IsNullOrWhiteSpace(candidate.SourceRootPath))
         {
-            var requestedRoot = Path.GetFullPath(candidate.SourceRootPath);
+            var requestedRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate.SourceRootPath));
             if (IsSameOrChildPath(sourceDirectory, requestedRoot))
             {
                 cleanupRoot = requestedRoot;
@@ -843,7 +846,25 @@ public sealed class RenameApplier
         // after the inspection, so a race cannot remove a newly created file.
         foreach (var emptyDirectory in emptyDirectories.OrderByDescending(path => path.Length))
         {
-            Directory.Delete(emptyDirectory, recursive: false);
+            var attributes = File.GetAttributes(emptyDirectory);
+            try
+            {
+                // Explorer can mark customized folders read-only. Only clear that
+                // attribute after verifying the entire tree contains no files.
+                if (attributes.HasFlag(FileAttributes.ReadOnly))
+                {
+                    File.SetAttributes(emptyDirectory, attributes & ~FileAttributes.ReadOnly);
+                }
+                Directory.Delete(emptyDirectory, recursive: false);
+            }
+            catch
+            {
+                if (Directory.Exists(emptyDirectory))
+                {
+                    File.SetAttributes(emptyDirectory, attributes);
+                }
+                throw;
+            }
         }
     }
 
@@ -988,4 +1009,7 @@ public sealed record RenameResult(
     IReadOnlyList<MediaPreviewItem> CompletedItems,
     string? JournalPath = null,
     bool RolledBack = false,
-    string? FailureMessage = null);
+    string? FailureMessage = null)
+{
+    public IReadOnlyList<string> CleanupWarnings { get; init; } = [];
+}
