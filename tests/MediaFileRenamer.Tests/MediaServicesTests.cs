@@ -860,6 +860,24 @@ public sealed class RenamePlannerTests
 public sealed class RenameApplierTests
 {
     [TestMethod]
+    public void Move_CleansReadOnlyEmptyFolderAndHonorsTrailingSeparatorBoundary()
+    {
+        using var temp = new TempDirectory();
+        var folder = temp.CreateDirectory("Selected");
+        var source = temp.CreateFile(Path.Combine(folder, "Movie.mkv"), "test");
+        File.SetAttributes(folder, File.GetAttributes(folder) | FileAttributes.ReadOnly);
+
+        var result = new RenameApplier().Apply(
+            [Item(source, Path.Combine(temp.Path, "Output", "Movie.mkv"), folder + Path.DirectorySeparatorChar)],
+            FileOperation.Move);
+
+        Assert.IsFalse(Directory.Exists(folder));
+        Assert.IsTrue(Directory.Exists(temp.Path));
+        Assert.AreEqual(1, result.DeletedSourceFolders);
+        Assert.IsEmpty(result.CleanupWarnings);
+    }
+
+    [TestMethod]
     public void Move_DeletesEmptySourceTree()
     {
         using var temp = new TempDirectory();
@@ -889,6 +907,8 @@ public sealed class RenameApplierTests
 
         Assert.IsTrue(Directory.Exists(sourceFolder));
         Assert.AreEqual(0, result.DeletedSourceFolders);
+        Assert.HasCount(1, result.CleanupWarnings);
+        Assert.IsTrue(File.Exists(Path.Combine(sourceFolder, "poster.jpg")));
     }
 
     [TestMethod]

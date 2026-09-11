@@ -249,9 +249,35 @@
                               AutomationProperties.Name="Original media files"
                               AutomationProperties.HelpText="Unified review table with original files, proposed destinations, match status, and row actions.">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Original file"
-                                                Binding="{Binding SourceFileName}"
-                                                Width="2*"/>
+                            <DataGridTemplateColumn Header="Original file" Width="2*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="22" Height="34" Margin="0,0,8,0"
+                                                    Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="2">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding PosterUrl}" Value="{x:Null}">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Image Source="{Binding PosterUrl}" Stretch="Uniform"
+                                                       AutomationProperties.Name="Media poster"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding SourceFileName}"
+                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SourceFileName}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Source folder"
                                                 Binding="{Binding SourceFolder}"
                                                 Width="2*"/>

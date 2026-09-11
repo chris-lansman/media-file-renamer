@@ -528,6 +528,13 @@ public partial class MainWindow : Window
         var folderSummary = result.DeletedSourceFolders > 0
             ? $" Removed {result.DeletedSourceFolders} empty source folder(s)."
             : "";
+        if (result.CleanupWarnings.Count > 0)
+        {
+            folderSummary += $" Kept {result.CleanupWarnings.Count} source folder(s): files remain or Windows blocked removal. See status details.";
+        }
+        StatusTextBlock.ToolTip = result.CleanupWarnings.Count > 0
+            ? string.Join(Environment.NewLine, result.CleanupWarnings)
+            : null;
         StatusTextBlock.Text = failedCount > 0
             ? $"Completed {result.CompletedItems.Count} item(s); {failedCount} failed item(s) remain.{folderSummary}"
             : $"Completed {result.CompletedItems.Count} item(s). The list is ready for more files.{folderSummary}";
@@ -1305,6 +1312,7 @@ public partial class MainWindow : Window
             cancellationToken);
         var match = resolution.Match;
         item.MediaType = selected.MediaType;
+        item.PosterUrl = selected.PosterUrl;
         item.TmdbId = match.TmdbId;
         item.TvdbId = match.TvdbId;
         item.MatchedTitle = match.Title;
@@ -1418,6 +1426,7 @@ public partial class MainWindow : Window
             }
 
             TvShowIdentityMatcher.Apply(relatedItem, identity);
+            relatedItem.PosterUrl = selected.PosterUrl;
             relatedItem.EpisodeOrder = matchedItem.EpisodeOrder;
             var resolution = await _metadataResolver.ResolveAsync(
                 client,
@@ -1444,6 +1453,7 @@ public partial class MainWindow : Window
 
     private static void ApplyLocalChoice(MediaPreviewItem item, string localMediaType)
     {
+        item.PosterUrl = null;
         item.MediaType = localMediaType;
         if (localMediaType == "TV" && string.IsNullOrWhiteSpace(item.EpisodeTitle))
         {

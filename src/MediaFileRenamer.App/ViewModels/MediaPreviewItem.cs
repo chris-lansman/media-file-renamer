@@ -17,6 +17,13 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     private int? _tvdbId;
     private string _episodeTitle = "";
     private string _mediaType = "Movie";
+    private string? _posterUrl;
+
+    public string? PosterUrl
+    {
+        get => _posterUrl;
+        set => SetField(ref _posterUrl, string.IsNullOrWhiteSpace(value) ? null : value);
+    }
 
     public string SourcePath { get; init; } = "";
     // The folder explicitly selected by the user (or the file's parent for Add Files).
