@@ -336,7 +336,7 @@ public sealed class TransactionalRenameTests
     }
 
     [TestMethod]
-    public void Undo_RefusesToMoveBackSameLengthChangedDestination()
+    public void Undo_RestoresNameOfSameFileWithoutRequiringOriginalContents()
     {
         using var temp = new TempDirectory();
         var source = temp.CreateFile("Movie.mkv", "video");
@@ -351,10 +351,35 @@ public sealed class TransactionalRenameTests
 
         var undo = journals.UndoLastCompleted();
 
+        Assert.IsTrue(undo.Success);
+        Assert.AreEqual("other", File.ReadAllText(source));
+        Assert.IsFalse(File.Exists(destination));
+    }
+
+    [TestMethod]
+    public void SameVolumeMove_RecordsIdentityAndRejectsReplacementAtUndo()
+    {
+        using var temp = new TempDirectory();
+        var source = temp.CreateFile("Movie.mkv", "video");
+        var destination = Path.Combine(temp.Path, "Output", "Renamed.mkv");
+        var journals = new OperationJournalService(temp.CreateDirectory("Journals"));
+        var originalIdentity = FileIdentity.TryRead(source);
+        Assert.IsNotNull(originalIdentity);
+
+        var applied = new RenameApplier(journals).Apply([Item(source, destination)], FileOperation.Move);
+        using var journal = System.Text.Json.JsonDocument.Parse(File.ReadAllText(applied.JournalPath!));
+        var entry = journal.RootElement.GetProperty("Entries")[0];
+        Assert.AreEqual(originalIdentity, entry.GetProperty("SourceIdentity").GetString());
+        Assert.AreEqual(System.Text.Json.JsonValueKind.Null, entry.GetProperty("DestinationSha256").ValueKind);
+        File.Move(destination, destination + ".original");
+        File.WriteAllText(destination, "other");
+
+        var undo = journals.UndoLastCompleted();
+
         Assert.IsFalse(undo.Success);
-        StringAssert.Contains(undo.Message, "changed content");
         Assert.IsFalse(File.Exists(source));
         Assert.AreEqual("other", File.ReadAllText(destination));
+        Assert.AreEqual("video", File.ReadAllText(destination + ".original"));
     }
 
     [TestMethod]

@@ -10,6 +10,7 @@ namespace MediaFileRenamer.App;
 public partial class OperationHistoryWindow : Window
 {
     private readonly OperationJournalService _journals;
+    private bool _undoBusy;
 
     public ObservableCollection<OperationJournalSummary> History { get; } = [];
 
@@ -23,8 +24,12 @@ public partial class OperationHistoryWindow : Window
         RefreshHistory();
     }
 
-    private void Undo_Click(object sender, RoutedEventArgs e)
+    private async void Undo_Click(object sender, RoutedEventArgs e)
     {
+        if (_undoBusy)
+        {
+            return;
+        }
         if (HistoryGrid.SelectedItem is not OperationJournalSummary selected
             || !CanUndo(selected))
         {
@@ -46,9 +51,26 @@ public partial class OperationHistoryWindow : Window
             return;
         }
 
-        var result = _journals.UndoCompleted(selected.Id);
-        HistoryStatusTextBlock.Text = result.Message;
-        RefreshHistory();
+        _undoBusy = true;
+        UndoButton.IsEnabled = false;
+        HistoryGrid.IsEnabled = false;
+        HistoryStatusTextBlock.Text = "Restoring original names...";
+        try
+        {
+            var result = await Task.Run(() => _journals.UndoCompleted(selected.Id));
+            HistoryStatusTextBlock.Text = result.Message;
+            RefreshHistory();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            HistoryStatusTextBlock.Text = $"Undo could not complete: {ex.Message}";
+        }
+        finally
+        {
+            _undoBusy = false;
+            HistoryGrid.IsEnabled = true;
+            UpdateSelectedOperation();
+        }
     }
 
     private void HistoryGrid_SelectionChanged(

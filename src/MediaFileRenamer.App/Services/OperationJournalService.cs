@@ -57,6 +57,7 @@ public sealed class OperationJournalService
                 IsCompanion = transfer.IsCompanion,
                 Length = transfer.Length,
                 DestinationSha256 = null,
+                SourceIdentity = transfer.SourceIdentity,
                 Status = OperationJournalEntryStatus.Planned
             }).ToList()
         };
@@ -198,7 +199,9 @@ public sealed class OperationJournalService
                 switch (entry.State)
                 {
                     case InterruptedEntryState.DestinationContainsTransfer:
-                        RestoreMovedFile(entry);
+                        RestoreMovedFile(entry, candidate.Journal.Entries.Single(value =>
+                            value.SourcePath == entry.SourcePath
+                            && value.DestinationPath == entry.DestinationPath).SourceIdentity);
                         restored++;
                         break;
 
@@ -388,6 +391,13 @@ public sealed class OperationJournalService
         if (operation == FileOperation.Copy && sourceState == FilePathState.Missing)
         {
             return $"Cannot undo because the original copy source is missing: {entry.SourcePath}";
+        }
+
+        if (operation == FileOperation.Move && entry.SourceIdentity is not null)
+        {
+            return FileIdentity.TryRead(entry.DestinationPath) == entry.SourceIdentity
+                ? null
+                : $"Cannot undo because the destination is a different file or its identity is unavailable: {entry.DestinationPath}";
         }
 
         if (new FileInfo(entry.DestinationPath).Length != entry.Length)
@@ -624,6 +634,15 @@ public sealed class OperationJournalService
                 sourceLength,
                 destinationLength,
                 partialPaths.Count);
+            if (operation == FileOperation.Move && entry.SourceIdentity is not null
+                && destinationExists)
+            {
+                state = !sourceExists
+                    && entry.Status is OperationJournalEntryStatus.InProgress or OperationJournalEntryStatus.Completed
+                    && FileIdentity.TryRead(entry.DestinationPath) == entry.SourceIdentity
+                        ? InterruptedEntryState.DestinationContainsTransfer
+                        : InterruptedEntryState.ManualReviewRequired;
+            }
             var message = state switch
             {
                 InterruptedEntryState.Unchanged =>
@@ -631,7 +650,7 @@ public sealed class OperationJournalService
                 InterruptedEntryState.PartialArtifactOnly =>
                     "The source is present; only app-owned partial copy files remain.",
                 InterruptedEntryState.DestinationContainsTransfer =>
-                    "The destination has the expected length and the original path is empty.",
+                    "The destination matches the recorded transfer and the original path is empty.",
                 InterruptedEntryState.ContentVerificationRequired =>
                     "Both paths exist with the expected length; contents must match before "
                     + "the destination can be removed.",
@@ -810,7 +829,7 @@ public sealed class OperationJournalService
         }
     }
 
-    private void RestoreMovedFile(InterruptedOperationEntry entry)
+    private void RestoreMovedFile(InterruptedOperationEntry entry, string? sourceIdentity)
     {
         var sourceState = _pathAvailabilityProbe.GetFileState(entry.SourcePath);
         if (sourceState is FilePathState.Unavailable or FilePathState.Indeterminate)
@@ -829,7 +848,9 @@ public sealed class OperationJournalService
         var destinationState =
             _pathAvailabilityProbe.GetFileState(entry.DestinationPath);
         if (destinationState != FilePathState.Exists
-            || new FileInfo(entry.DestinationPath).Length != entry.ExpectedLength)
+            || (sourceIdentity is not null
+                ? FileIdentity.TryRead(entry.DestinationPath) != sourceIdentity
+                : new FileInfo(entry.DestinationPath).Length != entry.ExpectedLength))
         {
             throw new IOException(
                 $"Cannot restore because the destination changed: {entry.DestinationPath}");
@@ -1236,5 +1257,6 @@ internal sealed class OperationJournalEntry
     public bool IsCompanion { get; set; }
     public long Length { get; set; }
     public string? DestinationSha256 { get; set; }
+    public string? SourceIdentity { get; set; }
     public OperationJournalEntryStatus Status { get; set; }
 }

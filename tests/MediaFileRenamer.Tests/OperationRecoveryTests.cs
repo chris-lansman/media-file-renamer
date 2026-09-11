@@ -7,6 +7,37 @@ namespace MediaFileRenamer.Tests;
 [TestClass]
 public sealed class OperationRecoveryTests
 {
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void RecoverIdentityMove_RestoresSameFileButRejectsReplacement(bool replaceDestination)
+    {
+        using var temp = new TempDirectory();
+        var journals = temp.CreateDirectory("Journals");
+        var source = temp.CreateFile("Original.mkv", "video");
+        var identity = FileIdentity.TryRead(source);
+        Assert.IsNotNull(identity);
+        var destination = Path.Combine(temp.Path, "Renamed.mkv");
+        var id = WriteJournal(journals, FileOperation.Move, OperationJournalStatus.InProgress,
+            [new { SourcePath = source, DestinationPath = destination, Length = 5,
+                SourceIdentity = identity, Status = OperationJournalEntryStatus.InProgress }]);
+        File.Move(source, destination);
+        if (replaceDestination)
+        {
+            File.Move(destination, destination + ".retained");
+        }
+        File.WriteAllText(destination, "updated content with a different size");
+
+        var service = new OperationJournalService(journals);
+        var inspection = service.GetInterruptedOperations().Single();
+        Assert.AreEqual(!replaceDestination, inspection.CanRollback);
+        var result = service.RecoverInterrupted(id, InterruptedOperationAction.Rollback);
+
+        Assert.AreEqual(!replaceDestination, result.Success);
+        Assert.AreEqual(!replaceDestination, File.Exists(source));
+        Assert.AreEqual(replaceDestination, File.Exists(destination));
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
