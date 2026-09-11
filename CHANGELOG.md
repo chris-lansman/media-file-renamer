@@ -3,6 +3,23 @@
 Notable user-visible changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/) for tagged releases.
 
+## 1.1.7 - 2026-09-10
+
+### Added
+
+- Adding files, folders, or drag-and-dropped media now starts metadata matching automatically and leaves only uncertain items for review.
+
+### Changed
+
+- A single credible metadata result can be selected automatically at 80% confidence or better, while multiple candidates still require the configured confidence threshold and a clear lead.
+- Batch re-matching and retrying unresolved items no longer open a sequence of chooser dialogs; unresolved rows remain focused for deliberate review.
+- The main workflow now labels the manual batch action as **Re-match All** and explains that newly added media matches automatically.
+
+### Fixed
+
+- Movie folder lookups now use the title before the release year, preventing resolution, codec, audio, and release-group text from contaminating searches such as the Austin Powers trilogy.
+- Plex-standard movie filenames contain the title and year only; the TMDB identifier remains on the movie folder where Plex expects it.
+
 ## 1.1.6 - 2026-09-08
 
 ### Fixed
