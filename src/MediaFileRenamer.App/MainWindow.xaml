@@ -258,7 +258,25 @@
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
                                             <Border Width="22" Height="34" Margin="0,0,8,0"
-                                                    Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="2">
+                                                    Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="2"
+                                                    ToolTipService.InitialShowDelay="300"
+                                                    ToolTipService.ShowDuration="60000">
+                                                <Border.ToolTip>
+                                                    <ToolTip Placement="Right" MaxWidth="280"
+                                                             Background="{DynamicResource SurfaceBrush}"
+                                                             BorderBrush="{DynamicResource BorderBrush}"
+                                                             DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                        <StackPanel Width="240">
+                                                            <Image Source="{Binding PosterUrl}" Width="240" MaxHeight="360"
+                                                                   Stretch="Uniform" AutomationProperties.Name="Enlarged media poster"/>
+                                                            <TextBlock Text="{Binding MatchedTitle}" Margin="0,8,0,0"
+                                                                       FontWeight="SemiBold" TextWrapping="Wrap"
+                                                                       Foreground="{DynamicResource TextBrush}"/>
+                                                            <TextBlock Text="{Binding Year}" Margin="0,3,0,0"
+                                                                       Foreground="{DynamicResource MutedTextBrush}"/>
+                                                        </StackPanel>
+                                                    </ToolTip>
+                                                </Border.ToolTip>
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Style.Triggers>
