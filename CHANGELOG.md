@@ -3,6 +3,19 @@
 Notable user-visible changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/) for tagged releases.
 
+## 1.1.8 - 2026-09-10
+
+### Added
+
+- Matched media displays a small provider poster beside its original filename, including related TV episodes.
+- Move results report source folders that could not be removed, with paths and reasons available in the status tooltip.
+
+### Fixed
+
+- Empty read-only source folders can be removed after a successful move.
+- Cleanup normalizes trailing directory separators so it stops precisely at the selected source folder.
+- Folders containing remaining files are preserved and their cleanup failures are no longer silent.
+
 ## 1.1.7 - 2026-09-10
 
 ### Added
