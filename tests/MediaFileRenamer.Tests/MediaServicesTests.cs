@@ -521,6 +521,37 @@ public sealed class MatchingTests
     }
 
     [TestMethod]
+    public void SelectAutoMatch_AcceptsOnlyCredibleCandidateBelowNormalThreshold()
+    {
+        var candidate = new TmdbCandidate(10, "Movie", "Expected Movie", 1999, "1999-01-01", "", "");
+
+        var match = TmdbClient.SelectAutoMatch([new TmdbAutoMatch(candidate, 84)], 92);
+
+        Assert.IsNotNull(match);
+        Assert.AreEqual(candidate, match.Candidate);
+    }
+
+    [TestMethod]
+    public void SelectAutoMatch_RejectsOnlyCandidateWhenConfidenceIsWeak()
+    {
+        var candidate = new TmdbCandidate(10, "Movie", "Different Movie", 1999, "1999-01-01", "", "");
+
+        Assert.IsNull(TmdbClient.SelectAutoMatch([new TmdbAutoMatch(candidate, 79)], 92));
+    }
+
+    [TestMethod]
+    public void SelectAutoMatch_StillUsesConfiguredThresholdForMultipleCandidates()
+    {
+        var candidates = new[]
+        {
+            new TmdbAutoMatch(new TmdbCandidate(10, "Movie", "First", 1999, "", "", ""), 88),
+            new TmdbAutoMatch(new TmdbCandidate(20, "Movie", "Second", 1999, "", "", ""), 70)
+        };
+
+        Assert.IsNull(TmdbClient.SelectAutoMatch(candidates, 92));
+    }
+
+    [TestMethod]
     public void RelatedEpisodes_DoNotCrossSeparateSourceFolders()
     {
         var first = new MediaPreviewItem

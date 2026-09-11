@@ -104,6 +104,23 @@ public sealed class RealWorldFilenameCorpusTests
     }
 
     [TestMethod]
+    [DataRow(
+        "Austin Powers In Goldmember 2002 1080p Bluray Remux VC-1 TrueHD 5.1-HDX.mkv",
+        "Austin Powers In Goldmember")]
+    [DataRow(
+        "Austin Powers International Man of Mystery 1997 1080p Bluray Remux VC-1 TrueHD 5.1-HDX.mkv",
+        "Austin Powers International Man of Mystery")]
+    [DataRow(
+        "Austin Powers The Spy Who Shagged Me 1999 1080p Bluray Remux VC-1 TrueHD 5.1-HDX.mkv",
+        "Austin Powers The Spy Who Shagged Me")]
+    public void CleanSearchText_UsesMovieFolderTitleBeforeReleaseDetails(
+        string folderName,
+        string expectedTitle)
+    {
+        Assert.AreEqual(expectedTitle, MediaScanner.CleanSearchText(folderName));
+    }
+
+    [TestMethod]
     public void Scan_AssociatesPgsSubtitleCompanion()
     {
         using var temp = new TempDirectory();

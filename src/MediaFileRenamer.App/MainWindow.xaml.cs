@@ -65,7 +65,7 @@ public partial class MainWindow : Window
         ShowSettings(isFirstRun: true);
     }
 
-    private void AddFiles_Click(object sender, RoutedEventArgs e)
+    private async void AddFiles_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
@@ -75,11 +75,11 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) == true)
         {
-            AddSources(dialog.FileNames);
+            await AddSourcesAndMatchAsync(dialog.FileNames);
         }
     }
 
-    private void AddFolder_Click(object sender, RoutedEventArgs e)
+    private async void AddFolder_Click(object sender, RoutedEventArgs e)
     {
         using var dialog = new Forms.FolderBrowserDialog
         {
@@ -89,7 +89,7 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog() == Forms.DialogResult.OK)
         {
-            AddSources([dialog.SelectedPath]);
+            await AddSourcesAndMatchAsync([dialog.SelectedPath]);
         }
     }
 
@@ -116,7 +116,11 @@ public partial class MainWindow : Window
 
     private async Task MatchAllAsync()
     {
-        await MatchItemsAsync(PreviewItems.ToList(), retryExistingMatches: false);
+        await MatchItemsAsync(
+            PreviewItems.ToList(),
+            retryExistingMatches: false,
+            showPickerForUncertain: false,
+            progressMessage: "Matching all files with configured providers...");
     }
 
     private async void RetryUnresolved_Click(object sender, RoutedEventArgs e)
@@ -133,12 +137,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        await MatchItemsAsync(unresolved, retryExistingMatches: true);
+        await MatchItemsAsync(
+            unresolved,
+            retryExistingMatches: true,
+            showPickerForUncertain: false,
+            progressMessage: $"Retrying {unresolved.Count} unresolved file(s) with configured providers...");
     }
 
     private async Task MatchItemsAsync(
         IReadOnlyList<MediaPreviewItem> items,
-        bool retryExistingMatches)
+        bool retryExistingMatches,
+        bool showPickerForUncertain,
+        string progressMessage)
     {
         var key = _settings.TmdbApiKey.Trim();
         var useTmdb = _settings.UseTmdbLookup && !string.IsNullOrWhiteSpace(key);
@@ -147,9 +157,7 @@ public partial class MainWindow : Window
         var resolutionClient = client ?? new TmdbClient("");
 
         StatusTextBlock.Text = useTmdb
-            ? retryExistingMatches
-                ? $"Retrying {items.Count} unresolved file(s) with configured providers..."
-                : "Matching all files with configured providers..."
+            ? progressMessage
             : "Planning filenames from local names; provider matching is not configured.";
 
         foreach (var item in items)
@@ -167,7 +175,7 @@ public partial class MainWindow : Window
                     resolutionClient,
                     tvdbClient,
                     item,
-                    showPickerForUncertain: true,
+                    showPickerForUncertain,
                     canSearchTmdb: client is not null);
                 if (selected is not null)
                 {
@@ -979,13 +987,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Window_Drop(object sender, System.Windows.DragEventArgs e)
+    private async void Window_Drop(object sender, System.Windows.DragEventArgs e)
     {
         if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
         {
             if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] paths)
             {
-                AddSources(paths);
+                await AddSourcesAndMatchAsync(paths);
             }
         }
     }
@@ -1026,7 +1034,22 @@ public partial class MainWindow : Window
         }
     }
 
-    private void AddSources(IEnumerable<string> paths)
+    private async Task AddSourcesAndMatchAsync(IEnumerable<string> paths)
+    {
+        var addedItems = AddSources(paths);
+        if (addedItems.Count == 0)
+        {
+            return;
+        }
+
+        await RunBusyAsync(() => MatchItemsAsync(
+            addedItems,
+            retryExistingMatches: false,
+            showPickerForUncertain: false,
+            progressMessage: $"Automatically matching {addedItems.Count} newly added file(s)..."));
+    }
+
+    private IReadOnlyList<MediaPreviewItem> AddSources(IEnumerable<string> paths)
     {
         IReadOnlyList<MediaPreviewItem> items;
         try
@@ -1036,13 +1059,13 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             StatusTextBlock.Text = $"Could not scan media: {ex.Message}";
-            return;
+            return [];
         }
 
         var existingSources = PreviewItems
             .Select(item => Path.GetFullPath(item.SourcePath))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var addedCount = 0;
+        var addedItems = new List<MediaPreviewItem>();
         foreach (var item in items)
         {
             if (!existingSources.Add(Path.GetFullPath(item.SourcePath)))
@@ -1071,7 +1094,7 @@ public partial class MainWindow : Window
             };
             UpdateDestination(item);
             PreviewItems.Add(item);
-            addedCount++;
+            addedItems.Add(item);
         }
 
         if (OriginalGrid.SelectedItem is null && PreviewItems.Count > 0)
@@ -1079,10 +1102,11 @@ public partial class MainWindow : Window
             OriginalGrid.SelectedItem = PreviewItems[0];
         }
 
-        StatusTextBlock.Text = addedCount == 0
+        StatusTextBlock.Text = addedItems.Count == 0
             ? "No new media files were added."
-            : $"Added {addedCount} media file(s); {PreviewItems.Count} total.";
+            : $"Added {addedItems.Count} media file(s); {PreviewItems.Count} total.";
         UpdateActionState();
+        return addedItems;
     }
 
     private void RefreshDestinations()

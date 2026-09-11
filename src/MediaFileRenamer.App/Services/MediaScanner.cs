@@ -370,7 +370,14 @@ public sealed partial class MediaScanner
 
     public static string CleanSearchText(string value)
     {
-        return ParseShowFolder(value)?.Title ?? NormalizeTitle(TrimTitle(CleanReleaseName(value)));
+        var explicitShowFolder = ParseShowFolder(value);
+        if (explicitShowFolder?.IsExplicitTv == true)
+        {
+            return explicitShowFolder.Title;
+        }
+
+        var cleaned = CleanReleaseName(value);
+        return NormalizeTitle(ParseMovieTitle(cleaned, YearPattern().Match(cleaned)));
     }
 
     private static ShowFolderInfo? ParseShowFolder(string? value)
