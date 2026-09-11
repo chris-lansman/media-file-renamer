@@ -3,6 +3,12 @@
 Notable user-visible changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/) for tagged releases.
 
+## 1.1.9 - 2026-09-10
+
+### Added
+
+- Hover over a matched cover thumbnail to see a larger poster with the matched title and year. The preview appears after a short delay and closes when the pointer leaves.
+
 ## 1.1.8 - 2026-09-10
 
 ### Added
