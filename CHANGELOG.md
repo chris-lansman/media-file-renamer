@@ -3,6 +3,26 @@
 Notable user-visible changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/) for tagged releases.
 
+## Unreleased
+
+### Added
+
+- Search and show/season grouping, guided review navigation, and removal of individual files from the batch without deleting them.
+- Highlighted filename changes, copyable full paths, folder shortcuts, and exact companion-file destination previews.
+- A completion panel with destination, Undo, and expandable cleanup details.
+- Automatic review-session saving and safe restoration with rescanned sources and a fresh review requirement, plus remembered workspace size, columns, and naming preferences.
+- Clickable naming tokens, a live custom-format preview, and validation of unknown or incomplete tokens.
+
+### Changed
+
+- Setup and review controls reflow at smaller widths; the final action and operation status remain visible. Repeated table actions and path columns are consolidated into the selected-file view.
+- Manual editing and provider details are collapsible, movie selections hide TV fields, and unavailable artwork has a visual fallback.
+
+### Fixed
+
+- The main menu's Undo action runs disk work in the background. Transfers prevent concurrent settings, history/recovery actions, editing, and window closure.
+- Navigating to a flagged row reveals it even when search or status filters previously hid it.
+
 ## 1.1.10 - 2026-09-10
 
 ### Changed

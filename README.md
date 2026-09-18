@@ -8,7 +8,19 @@ A Windows desktop app for staging Plex-friendly movie and TV filenames before mo
 2. Choose an output folder. The default is `%USERPROFILE%\renamed-media`.
 3. Pick `Move to staged folder` or `Copy to staged folder`.
 4. Use the Plex preset, flat review preset, or a custom token format.
-5. Click `Match All`, review every destination beside its original file, then click `Apply Rename`.
+5. New files match automatically. Review proposed destinations and resolve flagged rows, then use the **Move N files** or **Copy N files** button. **Re-match All** is available when you want to repeat matching.
+
+## Review workspace
+
+- Search staged filenames, titles, and source folders, or group rows by show and season. The review counter covers the whole batch, including rows hidden by filters.
+- **Previous review** and **Next review** clear search filters and navigate flagged files. Expand **Edit media details** to make corrections, then use **Confirm and next**. TV fields appear only for TV files.
+- Select a row to compare filenames: removed text is struck through and replacement text is highlighted. Expand **Full paths and companion files** to inspect exact destinations, copy paths, open folders, and inspect subtitle/artwork/NFO renames.
+- **Remove from batch** removes only the selected queue entry; it does not delete media. **Clear** empties the queue.
+- The final move/copy action stays at the bottom of the window. After a successful operation, a completion panel offers the destination folder, Undo, and expandable cleanup details.
+- Custom naming offers clickable tokens, a live filename example, and validation for unknown or incomplete tokens.
+- Unfinished review details, window size, column widths, output folder, operation, and naming preset are saved locally in `%LOCALAPPDATA%\MediaFileRenamer\workspace.json`. Restoring rescans existing source files and companions and requires fresh review; it never resumes a transfer automatically. Missing sources are reported. Clear the queue and close the app to discard a saved batch.
+
+Workspace files contain local paths and review metadata, but no provider credentials. Interrupted transfers continue to use the separate Operation History and Recovery Center safeguards.
 
 Uncertain files are searched as both movies and TV shows. TMDB and TVDB candidates are merged when the first result is missing or ambiguous, and TVDB-only series are retained instead of being discarded. Clear matches are selected automatically; close results open the poster picker with provider IDs, confidence, and the evidence behind the score. You can also use `Choose...` to force the picker or manually classify an unmatched file as a movie or TV episode. Local Movie/TV classification remains available when no TMDB key is configured.
 

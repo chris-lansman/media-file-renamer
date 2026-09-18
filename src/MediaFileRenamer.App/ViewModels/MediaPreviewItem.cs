@@ -40,6 +40,7 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     public int GroupFileCount { get; set; } = 1;
     public string SourceFileName => Path.GetFileNameWithoutExtension(SourcePath);
     public string SourceFolder => Path.GetDirectoryName(SourcePath) ?? "";
+    public string ReviewGroup => MediaType == "TV" ? $"{MatchedTitle} · Season {Season:00}" : "Movies / other media";
     public string Extension { get; init; } = "";
     public string ExtensionLabel => Extension.TrimStart('.').ToUpperInvariant();
     public List<string> CompanionPaths { get; } = [];

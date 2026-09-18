@@ -43,6 +43,7 @@ public partial class MainWindow : Window
         OperationComboBox.SelectedIndex =
             _settings.DefaultOperation == FileOperation.Copy ? 1 : 0;
         DataContext = this;
+        InitializeReviewWorkspace();
         UpdateCustomFormatVisibility();
         UpdateActionState();
     }
@@ -50,6 +51,7 @@ public partial class MainWindow : Window
     protected override async void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
+        await RestoreWorkspaceAsync();
         var recoveries = await GetStartupRecoveriesAsync();
         if (recoveries is { Count: > 0 })
         {
@@ -441,6 +443,12 @@ public partial class MainWindow : Window
             return false;
         }
 
+        if (!CollectionViewSource.GetDefaultView(PreviewItems).Contains(unresolved))
+        {
+            _search.Clear();
+            ReviewFilterComboBox.SelectedIndex = 1;
+        }
+
         OriginalGrid.SelectedItem = unresolved;
         OriginalGrid.ScrollIntoView(unresolved);
         return true;
@@ -538,6 +546,10 @@ public partial class MainWindow : Window
             return;
         }
 
+        _completedDestination = OutputFolderTextBox.Text;
+        _completionText.Text = $"{(operation == FileOperation.Copy ? "Copied" : "Moved")} {result.CompletedItems.Count} media file(s).";
+        _completionDetails.Text = $"Destination: {_completedDestination}\nRemoved {result.DeletedSourceFolders} empty source folder(s).\n" + string.Join(Environment.NewLine, result.CleanupWarnings);
+        _completionPanel.Visibility = Visibility.Visible;
         RemoveCompletedItems(result.CompletedItems);
 
         var failedCount = PreviewItems.Count;
@@ -628,6 +640,11 @@ public partial class MainWindow : Window
         RenameButton.IsEnabled = enabled;
         ReviewGuidancePanel.IsEnabled = enabled;
         SelectedFileEditor.IsEnabled = enabled;
+        OriginalGrid.IsEnabled = enabled;
+        OutputFolderTextBox.IsEnabled = enabled;
+        OperationComboBox.IsEnabled = enabled;
+        PresetComboBox.IsEnabled = enabled;
+        RefreshWorkspaceDetails();
     }
 
     private void UpdateActionState()
@@ -658,6 +675,10 @@ public partial class MainWindow : Window
         var selectedItem = OriginalGrid.SelectedItem as MediaPreviewItem;
         var hasSelection = selectedItem is not null;
         var reviewCount = PreviewItems.Count(item => item.RequiresReview);
+        OriginalGrid.IsEnabled = true;
+        OutputFolderTextBox.IsEnabled = true;
+        OperationComboBox.IsEnabled = true;
+        PresetComboBox.IsEnabled = true;
         AddFilesButton.IsEnabled = true;
         AddFolderButton.IsEnabled = true;
         ClearButton.IsEnabled = hasItems;
@@ -704,6 +725,7 @@ public partial class MainWindow : Window
                     : $"{reviewCount} items need review";
         ReviewCountTextBlock.Foreground = (System.Windows.Media.Brush)FindResource(
             !hasItems ? "MutedTextBrush" : reviewCount == 0 ? "MatchBrush" : "ReviewBrush");
+        RefreshWorkspaceDetails();
     }
 
     private void RemoveCompletedItems(IEnumerable<MediaPreviewItem> completedItems)
@@ -799,6 +821,7 @@ public partial class MainWindow : Window
 
     private void ShowSettings(bool isFirstRun)
     {
+        if (_isBusy) return;
         var window = new SettingsWindow(
             _settings,
             _settingsService.SettingsPath,
@@ -831,6 +854,7 @@ public partial class MainWindow : Window
 
     private void OperationHistoryMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        if (_isBusy) return;
         var window = new OperationHistoryWindow(_journalService)
         {
             Owner = this
@@ -840,6 +864,7 @@ public partial class MainWindow : Window
 
     private void RecoveryCenterMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        if (_isBusy) return;
         ShowRecoveryCenter();
     }
 
@@ -902,8 +927,9 @@ public partial class MainWindow : Window
         }.ShowDialog();
     }
 
-    private void UndoLastOperationMenuItem_Click(object sender, RoutedEventArgs e)
+    private async void UndoLastOperationMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        if (_isBusy) return;
         var confirmation = System.Windows.MessageBox.Show(
             this,
             "Undo the most recent completed move or copy operation? "
@@ -916,14 +942,20 @@ public partial class MainWindow : Window
             return;
         }
 
-        var result = _journalService.UndoLastCompleted();
-        StatusTextBlock.Text = result.Message;
-        System.Windows.MessageBox.Show(
-            this,
-            result.Message,
-            result.Success ? "Undo complete" : "Undo unavailable",
-            MessageBoxButton.OK,
-            result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        await RunBusyAsync(async () =>
+        {
+            CancelOperationButton.Visibility = Visibility.Collapsed;
+            StatusTextBlock.Text = "Undoing the last operation...";
+            var result = await Task.Run(_journalService.UndoLastCompleted);
+            StatusTextBlock.Text = result.Message;
+            System.Windows.MessageBox.Show(
+                this,
+                result.Message,
+                result.Success ? "Undo complete" : "Undo unavailable",
+                MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            _completionPanel.Visibility = Visibility.Collapsed;
+        });
     }
 
     private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
@@ -968,15 +1000,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        ICollectionView view = CollectionViewSource.GetDefaultView(PreviewItems);
-        view.Filter = ReviewFilterComboBox.SelectedIndex switch
-        {
-            1 => item => item is MediaPreviewItem preview && preview.RequiresReview,
-            2 => item => item is MediaPreviewItem preview && preview.MatchState == "Matched",
-            3 => item => item is MediaPreviewItem preview && preview.MatchState == "Blocked",
-            _ => null
-        };
-        view.Refresh();
+        ApplyWorkspaceFilter();
     }
 
     private void OutputFolderTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -1102,27 +1126,7 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            item.PropertyChanged += (_, args) =>
-            {
-                if (args.PropertyName is nameof(MediaPreviewItem.MatchedTitle)
-                    or nameof(MediaPreviewItem.MediaType)
-                    or nameof(MediaPreviewItem.Year)
-                    or nameof(MediaPreviewItem.Season)
-                    or nameof(MediaPreviewItem.Episode)
-                    or nameof(MediaPreviewItem.EpisodeTitle)
-                    or nameof(MediaPreviewItem.TmdbId))
-                {
-                    UpdateDestination(item);
-                }
-                else if (args.PropertyName is nameof(MediaPreviewItem.MatchState)
-                         or nameof(MediaPreviewItem.RequiresReview))
-                {
-                    UpdateActionState();
-                    CollectionViewSource.GetDefaultView(PreviewItems).Refresh();
-                }
-            };
-            UpdateDestination(item);
-            PreviewItems.Add(item);
+            AttachPreviewItem(item);
             addedItems.Add(item);
         }
 
@@ -1136,6 +1140,34 @@ public partial class MainWindow : Window
             : $"Added {addedItems.Count} media file(s); {PreviewItems.Count} total.";
         UpdateActionState();
         return addedItems;
+    }
+
+    private void AttachPreviewItem(MediaPreviewItem item)
+    {
+        item.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is nameof(MediaPreviewItem.MatchedTitle)
+                or nameof(MediaPreviewItem.MediaType)
+                or nameof(MediaPreviewItem.Year)
+                or nameof(MediaPreviewItem.Season)
+                or nameof(MediaPreviewItem.Episode)
+                or nameof(MediaPreviewItem.EpisodeEnd)
+                or nameof(MediaPreviewItem.EpisodeTitle)
+                or nameof(MediaPreviewItem.TvdbId)
+                or nameof(MediaPreviewItem.TmdbId))
+            {
+                UpdateDestination(item);
+            }
+            else if (args.PropertyName is nameof(MediaPreviewItem.MatchState)
+                     or nameof(MediaPreviewItem.RequiresReview))
+            {
+                UpdateActionState();
+                CollectionViewSource.GetDefaultView(PreviewItems).Refresh();
+            }
+        };
+        UpdateDestination(item);
+        PreviewItems.Add(item);
+
     }
 
     private void RefreshDestinations()

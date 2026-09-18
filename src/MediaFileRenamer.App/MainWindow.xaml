@@ -47,11 +47,11 @@
                       HorizontalScrollBarVisibility="Auto"
                       CanContentScroll="False"
                       AutomationProperties.Name="Media rename workspace">
-        <Border MinWidth="944"
+        <Border MinWidth="580"
                 MinHeight="{Binding ViewportHeight, ElementName=MainScrollViewer}"
                 Width="{Binding ViewportWidth, ElementName=MainScrollViewer}"
-                Padding="22,18,22,20">
-        <Grid MinHeight="658">
+                Padding="14">
+        <Grid MinHeight="600">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -73,8 +73,8 @@
                         <Image Source="Assets/app-icon.png" Stretch="Uniform"/>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="Media File Renamer" FontSize="27" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
-                        <TextBlock Text="Add media to match it automatically, review only uncertain changes, then move or copy with confidence."
+                        <TextBlock Text="Media File Renamer" FontSize="23" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock Text="Add media → Review changes → Move or copy"
                                    Foreground="{DynamicResource MutedTextBrush}" Margin="0,3,12,0"
                                    TextWrapping="Wrap"/>
                     </StackPanel>
@@ -152,7 +152,7 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Margin="0,0,0,9">
+                <Grid Grid.Row="0" Margin="0,0,0,9"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
@@ -167,7 +167,7 @@
                                    AutomationProperties.Name="Review status"
                                    AutomationProperties.LiveSetting="Polite"/>
                     </StackPanel>
-                    <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" HorizontalAlignment="Left" VerticalAlignment="Center">
                         <ComboBox x:Name="ReviewFilterComboBox"
                                   MinWidth="132" SelectedIndex="0" Margin="0,0,8,0"
                                   SelectionChanged="ReviewFilterComboBox_SelectionChanged"
@@ -180,7 +180,7 @@
                         <Button x:Name="MatchSelectedButton" Content="Retry Selected" MinWidth="118"
                                 Margin="0,0,8,0" Click="MatchSelected_Click" IsEnabled="False"
                                 AutomationProperties.Name="Retry matching the selected file"/>
-                        <Button x:Name="ChooseSelectedButton" Content="Choose Show..." MinWidth="124"
+                        <Button x:Name="ChooseSelectedButton" Content="Choose Match..." MinWidth="124"
                                 Margin="0,0,8,0" Click="ChooseSelected_Click" IsEnabled="False"
                                 AutomationProperties.Name="Choose the movie or show for the selected file"/>
                         <Button x:Name="RetryUnresolvedButton" Content="Retry Unresolved" MinWidth="126"
@@ -277,18 +277,10 @@
                                                         </StackPanel>
                                                     </ToolTip>
                                                 </Border.ToolTip>
-                                                <Border.Style>
-                                                    <Style TargetType="Border">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding PosterUrl}" Value="{x:Null}">
-                                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Border.Style>
-                                                <Image Source="{Binding PosterUrl}" Stretch="Uniform"
-                                                       AutomationProperties.Name="Media poster"/>
-                                            </Border>
+                                                <Grid>
+                                                    <TextBlock Text="—" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}"/>
+                                                    <Image Source="{Binding PosterUrl}" Stretch="Uniform" AutomationProperties.Name="Media poster"/>
+                                                </Grid>                                            </Border>
                                             <TextBlock Grid.Column="1" Text="{Binding SourceFileName}"
                                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                        ToolTip="{Binding SourceFileName}"/>
@@ -296,13 +288,13 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Source folder"
+                            <DataGridTextColumn Header="Source folder" Visibility="Collapsed"
                                                 Binding="{Binding SourceFolder}"
                                                 Width="2*"/>
                             <DataGridTextColumn Header="Proposed name"
                                                 Binding="{Binding DestinationFileName}"
                                                 Width="2*"/>
-                            <DataGridTextColumn Header="Destination"
+                            <DataGridTextColumn Header="Destination" Visibility="Collapsed"
                                                 Binding="{Binding DestinationFolder}"
                                                 Width="2*"/>
                             <DataGridTemplateColumn Header="Status / provider" Width="160">
@@ -367,7 +359,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="Actions" Width="168">
+                            <DataGridTemplateColumn Header="Actions" Width="168" Visibility="Collapsed">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal">
@@ -512,7 +504,7 @@
                     <WrapPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="10"
                                Margin="0,12,0,0">
                         <Button x:Name="ConfirmManualDetailsButton"
-                                Content="Confirm Edited Details" Margin="0,0,8,0"
+                                Content="Confirm and next" Margin="0,0,8,0"
                                 Click="ConfirmManualDetails_Click"
                                 IsEnabled="{Binding SelectedItem.CanConfirmManualDetails, ElementName=OriginalGrid}"
                                 AutomationProperties.Name="Confirm the manually edited media details"/>
