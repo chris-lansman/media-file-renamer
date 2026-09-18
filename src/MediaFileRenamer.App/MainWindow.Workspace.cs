@@ -90,6 +90,7 @@ public partial class MainWindow
         Grid.SetColumn(headingButtons, 0);
         Grid.SetRow(headingButtons, 1);
         Grid.SetColumnSpan(headingButtons, 2);
+        headingButtons.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
         headingButtons.Margin = new Thickness(0, 10, 0, 0);
         var headingText = heading.Children.OfType<Grid>().First();
         Grid.SetColumnSpan(headingText, 2);
