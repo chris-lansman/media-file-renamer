@@ -1,5 +1,17 @@
 # Media File Renamer - Codex Handoff
 
+Last verified: 2026-10-13.
+
+## Current State
+
+- Active development branch: `codex/review-workspace-polish`. Keep follow-up changes on this branch unless the user requests another destination.
+- Latest implementation: `c56a160` (review/workflow refinements); validation record: `cb4ae9d`.
+- The user reviewed the preview and said the changes look great. Preserve the current visual style and keep import controls aligned to the right.
+- Local self-contained preview: `dist\MediaFileRenamer-ux-preview\MediaFileRenamer.exe`, version `1.1.11-preview.2+c56a160...`. ZIP and SHA-256 files are alongside it in `dist`; build outputs are ignored by Git and are not uploaded by a branch push.
+- Validation: 212 tests passed, formatting and diff checks passed, strict Release build had 0 warnings/errors. Ready and unresolved layouts were rendered at 640/1024/1360 pixels. The exact packaged executable passed two isolated save/reopen cycles and Clear batch restoration without changing the source fixture.
+- Known validation limitation: no vulnerable dependencies were found, but the deprecation gate fails on existing MSTest 4.3.2 packages and Microsoft.Testing.Platform.MSBuild 2.3.2. Resolve the test-platform migration before claiming the complete release gate passes.
+- Personal-provider lookups, actual display scaling/themes, and the real-world acceptance matrix still require manual verification. See `docs\WORKSPACE-PREVIEW-TESTING.md` for the current checklist and evidence locations.
+
 ## Purpose
 
 `Media File Renamer` is a private Windows desktop application for staging movie and TV files into Plex-friendly names before they are copied to network storage. It is a personal replacement for FileBot, with a clearer review workflow.
@@ -19,7 +31,7 @@ The app should move or copy files there first. It must not automatically place m
 - Current local repository: `C:\Users\clansman\repos\media-file-renamer`
 - Windows application project: `src\MediaFileRenamer.App\MediaFileRenamer.App.csproj`
 - Test project: `tests\MediaFileRenamer.Tests\MediaFileRenamer.Tests.csproj`
-- Last feature commit before this handoff document: `18a6603 Clarify match status in the review workspace`
+- Current feature and validation commits are listed under Current State above; verify local/remote heads when resuming.
 
 Run the exact CI test command after restore and a Release build:
 
@@ -54,13 +66,19 @@ dist\MediaFileRenamer\MediaFileRenamer.exe
 ## Current User Workflow
 
 1. Add individual files, a folder, or drag media into the app.
-2. Set the staging output folder, operation, and naming preset.
-3. Click **Match All**.
-4. Review the source list beside the proposed destination list.
-5. Use **Choose...** for a deliberate poster-based movie/TV selection when needed.
-6. Click **Apply Rename** once the batch is safe.
+2. Matching starts automatically. Check the staging output folder, operation, and naming preset; narrow windows summarize these under expandable **Staging options**.
+3. Review original and proposed filenames in one table. Search, grouping, filters, and Previous/Next review navigation stay above the table; selected-file actions sit beside the highlighted filename comparison.
+4. Resolve flagged rows with **Choose Match...**, **Browse Episodes...**, or **Edit media details**. **Confirm and next** continues forward from the selected file, wrapping around to earlier unresolved rows.
+5. **Ready to move/copy** means no flagged rows remain, rather than claiming a human inspected automatic matches. After the final flagged item, an empty Needs review filter offers **Show all files**.
+6. Confirm **Move N files** or **Copy N files**. The final action and operation status stay visible while the workspace scrolls.
 
 Successful rows are removed from the list after the move/copy. Rows that fail remain, with a status describing the problem.
+
+**Re-match All** repeats matching for existing provider results. When manual choices exist, a dialog defaults to keeping them and allows explicit replacement. Kept manual TV choices are also protected against related-show updates.
+
+**Clear batch** removes queue entries without deleting source files. **Restore cleared batch** recovers only the most recently cleared batch during the current session, rescans sources/companions, preserves newly added rows, and requires fresh review. Closing the app discards this shortcut. File-operation Undo remains separate.
+
+Unfinished work is persisted to `%LOCALAPPDATA%\MediaFileRenamer\workspace.json`. Startup restoration rescans sources and companions, replans destinations, reports missing sources, and always requires fresh review. Never trust saved destinations or status as transfer authorization.
 
 ## Matching and Metadata
 
@@ -70,7 +88,7 @@ Successful rows are removed from the list after the move/copy. Rows that fail re
 - If the filename contains an episode title, TVDB fallback requires that title to agree after punctuation/case normalization. A conflict stays `Review needed`.
 - Matched TV rows display the episode provider as `Matched · TMDB` or `Matched · TVDB`.
 - Default auto-match confidence: `92%`.
-- High-confidence, non-near-tied candidates auto-select. Ambiguous candidates open the poster picker.
+- High-confidence, non-near-tied candidates auto-select. Automatic batch matching leaves uncertain rows for review; choosing a match opens the poster picker deliberately.
 - Matching looks at both movie and TV possibilities and includes parent-folder evidence for TV items.
 - Candidate rows show TMDB/TVDB provenance, provider IDs, confidence, and scoring evidence.
 - Transient metadata `429` and `5xx` responses use bounded retry/backoff, and lookups accept cancellation.
@@ -153,8 +171,8 @@ FileBot's Rename workspace makes a visual distinction between original files and
 Current behavior:
 
 - `MediaPreviewItem.RequiresReview` covers `Review needed`, `Ready to match`, and `Blocked`. A deliberate `Manual choice` is valid, except that TV choices still need season and episode numbers.
-- A live review count appears beneath **Apply Rename**.
-- **Apply Rename** remains disabled until every item is resolved and has a destination.
+- A live review count above the table covers the entire batch, including rows hidden by filters.
+- **Move N files** / **Copy N files** remains disabled until every item is resolved and has a destination.
 - The apply handler selects the first unresolved item and explains the block if invoked through another path.
 - `RenameApplier.Apply` independently rejects the entire batch when any row requires review.
 - Local Movie/TV classification remains available through **Choose...** without a TMDB key.
@@ -187,7 +205,7 @@ GitHub Actions workflow: `.github\workflows\build.yml`
 
 - Pushes and pull requests to `main` run restore, formatting verification, warnings-as-errors build, tests, and NuGet auditing on `windows-latest`.
 - CI uses Microsoft Testing Platform's named `--solution` form and requires at least one discovered test, preventing a zero-test run from passing silently.
-- Successful pushes to `main` package a self-contained `win-x64` ZIP and SHA-256 file as a 30-day artifact.
+- Version tags and explicitly dispatched workflow runs package a self-contained `win-x64` ZIP and SHA-256 file; ordinary branch pushes do not upload local preview binaries.
 - A version tag such as `v0.1.0` creates a permanent GitHub Release with the ZIP and checksum.
 - Optional Authenticode signing is gated on both signing secrets being configured; unsigned builds remain supported.
 - There are intentionally no self-hosted or GitLab runners.
@@ -197,7 +215,7 @@ GitHub Actions workflow: `.github\workflows\build.yml`
 1. Run the strict validation commands from `README.md`.
 2. Build the self-contained executable into a clean `dist` folder.
 3. Generate disposable fixtures and complete `docs\ACCEPTANCE.md` against the exact packaged candidate, including recovery, timestamp, and UNC rows where network-share support is claimed.
-4. Commit with a focused message and push `main`; GitHub Actions will publish the development artifact.
+4. Commit and push the active development branch. Use a pull request for integration into `main`; packaging requires an explicit workflow dispatch or version tag. Do not claim a release is complete while the dependency deprecation gate is failing.
 
 ## Safety Notes
 
