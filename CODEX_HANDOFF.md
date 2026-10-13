@@ -5,16 +5,26 @@ Last verified: 2026-10-13.
 ## Current State
 
 - Active development branch: `codex/review-workspace-polish`. Keep follow-up changes on this branch unless the user requests another destination.
-- Latest implementation: `c56a160` (review/workflow refinements); validation record: `cb4ae9d`.
+- Latest implementation: `1355b14` (review/workflow refinements); validation record: `b7e06b3`. These are the replacement commit IDs after the identity cleanup.
 - The user reviewed the preview and said the changes look great. Preserve the current visual style and keep import controls aligned to the right.
 - Local self-contained preview: `dist\MediaFileRenamer-ux-preview\MediaFileRenamer.exe`, version `1.1.11-preview.2+c56a160...`. ZIP and SHA-256 files are alongside it in `dist`; build outputs are ignored by Git and are not uploaded by a branch push.
 - Validation: 212 tests passed, formatting and diff checks passed, strict Release build had 0 warnings/errors. Ready and unresolved layouts were rendered at 640/1024/1360 pixels. The exact packaged executable passed two isolated save/reopen cycles and Clear batch restoration without changing the source fixture.
 - Known validation limitation: no vulnerable dependencies were found, but the deprecation gate fails on existing MSTest 4.3.2 packages and Microsoft.Testing.Platform.MSBuild 2.3.2. Resolve the test-platform migration before claiming the complete release gate passes.
 - Personal-provider lookups, actual display scaling/themes, and the real-world acceptance matrix still require manual verification. See `docs\WORKSPACE-PREVIEW-TESTING.md` for the current checklist and evidence locations.
 
+## Commit Identity and History Cleanup
+
+- This repository is public, verified through the GitHub API on 2026-10-13. Earlier descriptions of it as private were outdated.
+- The user requested the commit display name `chris-lansman` and removal of the work identity from existing history. Repository-local Git configuration now sets `user.name` to `chris-lansman` and `user.email` to `28708312+chris-lansman@users.noreply.github.com`; other repositories' identity settings were not changed.
+- Four remote branches and twelve affected annotated release tags were rewritten and pushed with atomic, explicit force-with-lease guards. All 83 retained branch/tag commit trees were verified unchanged, and author/committer/tagger metadata no longer contains the work identity. Bot/service attribution and earlier private-email commits were preserved.
+- Fresh agents must verify the repository-local identity before committing. Do not rely on Git's inferred Windows username or machine email. Use the alias and the verified GitHub noreply address for this project.
+- Existing clones should be re-cloned or deliberately synchronized with the rewritten refs; merging old history can restore the removed identity. Historical signatures and old commit IDs are affected. GitHub's read-only pull-request refs, caches, other clones, and historical download assets are outside the branch/tag rewrite; do not claim complete erasure from every stored copy.
+- A local, ignored recovery bundle exists under `tmp\identity-cleanup-20261013\before-rewrite.bundle`. It retains the old metadata for recovery; never push its original refs back to GitHub.
+- Existing preview binaries were packaged before the identity rewrite, so their informational-version suffix still contains the original source hash. The app's code and behavior are unchanged.
+
 ## Purpose
 
-`Media File Renamer` is a private Windows desktop application for staging movie and TV files into Plex-friendly names before they are copied to network storage. It is a personal replacement for FileBot, with a clearer review workflow.
+`Media File Renamer` is a personal Windows desktop application for staging movie and TV files into Plex-friendly names before they are copied to network storage. It is a personal replacement for FileBot, with a clearer review workflow.
 
 The preferred staging location is:
 
@@ -26,7 +36,7 @@ The app should move or copy files there first. It must not automatically place m
 
 ## Repository and Build
 
-- Repository: `https://github.com/chris-lansman/media-file-renamer` (private)
+- Repository: `https://github.com/chris-lansman/media-file-renamer` (public; verified 2026-10-13)
 - Primary branch: `main`
 - Current local repository: `C:\Users\clansman\repos\media-file-renamer`
 - Windows application project: `src\MediaFileRenamer.App\MediaFileRenamer.App.csproj`
