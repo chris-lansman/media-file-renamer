@@ -17,3 +17,13 @@ Use a small disposable batch first. Close any other copy of the app before testi
 11. At a narrow width, expand Staging options to change operation or folder. The filename comparison should appear above the table, and readiness wording should track Move versus Copy without implying a person reviewed automatic matches.
 
 Automated validation covers the existing rename/recovery safeguards plus session serialization, fresh-review restoration, search/filter gating, removal without deletion, grouping, companion destinations, busy-state restrictions, naming validation, and rendered layouts at 640, 1024, and 1360 pixels wide.
+
+## Local validation — 2026-10-13
+
+- Preview: `1.1.11-preview.2`, application source commit `c56a160`.
+- Strict Release build: 0 warnings, 0 errors. Formatting verification and `git diff --check` passed.
+- Test suite: 212 passed, 0 failed. The new cases cover forward/wrapping confirmation, empty filters, clear/restore with missing sources and new companions, manual-choice protection, and ready/unresolved renders at all three supported widths.
+- The exact self-contained executable passed two isolated UI Automation save/reopen cycles plus Clear batch → Restore cleared batch. The disposable source fixture stayed unchanged and applying remained disabled until fresh review.
+- Package: `dist/MediaFileRenamer-ux-preview-win-x64.zip`, with its adjacent SHA-256 file. Test evidence is under `TestResults/UX-refinements.trx`, `TestResults/workspace-previews`, and `TestResults/ux-preview-smoke`.
+- Dependency audit: no vulnerable packages found. The deprecation gate fails on existing test dependencies (`MSTest.TestAdapter`, `MSTest.TestFramework`, `MSTest.Analyzers`, and `Microsoft.Testing.Platform.MSBuild`); this UI pass does not migrate the test platform.
+- Remaining manual acceptance: personal provider lookups, actual Windows display scaling/themes, and the checklist above using disposable media. The local UI smoke did not move or copy real media or change normal app settings.
