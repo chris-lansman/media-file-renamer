@@ -84,8 +84,9 @@
                             AutomationProperties.Name="Add media files"/>
                     <Button x:Name="AddFolderButton" Content="Add Folder" Click="AddFolder_Click" Margin="0,0,8,0"
                             AutomationProperties.Name="Add media folder"/>
-                    <Button x:Name="ClearButton" Content="Clear" Click="Clear_Click" Style="{StaticResource QuietButtonStyle}" IsEnabled="False"
-                            AutomationProperties.Name="Clear staged files"/>
+                    <Button x:Name="ClearButton" Content="Clear batch" Click="Clear_Click" Style="{StaticResource QuietButtonStyle}" IsEnabled="False"
+                            ToolTip="Clear the review queue without deleting source files. The cleared batch can be restored in this session."
+                            AutomationProperties.Name="Clear staged batch"/>
                 </StackPanel>
             </Grid>
 
@@ -140,6 +141,7 @@
 
                     <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
                         <Button x:Name="MatchAllButton" Content="Re-match All" Click="MatchAll_Click" Style="{StaticResource PrimaryButtonStyle}" IsEnabled="False"
+                                ToolTip="Repeat matching for the batch. You can choose to keep or replace manual corrections."
                                 AutomationProperties.Name="Re-match all staged files"/>
                     </StackPanel>
                 </Grid>
@@ -245,7 +247,7 @@
                               Style="{StaticResource PaneGridStyle}"
                               ItemsSource="{Binding PreviewItems}"
                               SelectionChanged="OriginalGrid_SelectionChanged"
-                              MinHeight="238"
+                              MinHeight="160"
                               AutomationProperties.Name="Original media files"
                               AutomationProperties.HelpText="Unified review table with original files, proposed destinations, match status, and row actions.">
                         <DataGrid.Columns>

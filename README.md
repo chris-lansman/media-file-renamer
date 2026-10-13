@@ -13,9 +13,12 @@ A Windows desktop app for staging Plex-friendly movie and TV filenames before mo
 ## Review workspace
 
 - Search staged filenames, titles, and source folders, or group rows by show and season. The review counter covers the whole batch, including rows hidden by filters.
-- **Previous review** and **Next review** clear search filters and navigate flagged files. Expand **Edit media details** to make corrections, then use **Confirm and next**. TV fields appear only for TV files.
+- **Previous review** and **Next review** clear search filters and navigate flagged files. Expand **Edit media details** to make corrections, then use **Confirm and next**, which continues forward from the selected file and wraps around. TV fields appear only for TV files.
 - Select a row to compare filenames: removed text is struck through and replacement text is highlighted. Expand **Full paths and companion files** to inspect exact destinations, copy paths, open folders, and inspect subtitle/artwork/NFO renames.
-- **Remove from batch** removes only the selected queue entry; it does not delete media. **Clear** empties the queue.
+- Selected-file actions sit beside the filename comparison; filters and review navigation stay above the table. **More matching options** contains the batch retry action. Narrow windows summarize staging options in an expandable panel and put the selected-file comparison above the table.
+- **Ready to move/copy** means no items need attention; automatic matches still deserve a final visual check. A filtered batch with no results explains why, and **Show all files** returns to the whole batch after review is complete.
+- **Re-match All** repeats provider matching even for existing automatic matches. If manual choices exist, choose whether to keep or replace them; kept manual TV choices are also protected from related-show updates.
+- **Remove from batch** removes only the selected queue entry; it does not delete media. **Clear batch** empties the queue and offers **Restore cleared batch** during the current session. Restoration rescans sources and companions, keeps new queue entries, and requires fresh review. Only the most recently cleared batch is retained, and closing the app discards that restoration shortcut.
 - The final move/copy action stays at the bottom of the window. After a successful operation, a completion panel offers the destination folder, Undo, and expandable cleanup details.
 - Custom naming offers clickable tokens, a live filename example, and validation for unknown or incomplete tokens.
 - Unfinished review details, window size, column widths, output folder, operation, and naming preset are saved locally in `%LOCALAPPDATA%\MediaFileRenamer\workspace.json`. Restoring rescans existing source files and companions and requires fresh review; it never resumes a transfer automatically. Missing sources are reported. Clear the queue and close the app to discard a saved batch.

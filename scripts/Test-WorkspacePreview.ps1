@@ -68,6 +68,25 @@ for ($attempt = 1; $attempt -le 2; $attempt++) {
         $apply = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
             [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'RenameButton'))
         if ($apply.Current.IsEnabled) { throw 'A restored batch incorrectly allowed applying before fresh review.' }
+        if ($attempt -eq 2) {
+            $clear = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ClearButton'))
+            ([System.Windows.Automation.InvokePattern]$clear.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+            $restore = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'RestoreClearedBatchButton'))
+            if ($null -eq $restore -or -not $restore.Current.IsEnabled) { throw 'Clearing the batch did not offer restoration.' }
+            ([System.Windows.Automation.InvokePattern]$restore.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+            $restoreDeadline = (Get-Date).AddSeconds(10)
+            do {
+                Start-Sleep -Milliseconds 200
+                $rows = $grid.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem))
+            } while ((Get-Date) -lt $restoreDeadline -and ($rows.Count -ne 1 -or -not $grid.Current.IsEnabled))
+            if ($rows.Count -ne 1 -or $rows[0].Current.Name -notmatch 'Review needed' -or $apply.Current.IsEnabled) {
+                throw 'Restoring the cleared batch did not preserve the fresh-review gate.'
+            }
+            Write-Host 'Packaged clear/restore workflow passed without changing the source fixture.'
+        }
         Start-Sleep -Seconds 3
         if (-not $process.CloseMainWindow()) { throw 'Could not request normal window closure.' }
         if (-not $process.WaitForExit(10000)) { throw 'The app did not close normally.' }

@@ -1042,7 +1042,7 @@ function Open-ManualChoiceForFirstRow {
 
     $choose = Find-UiaElement `
         -Root $MainWindow `
-        -AutomationId "ChooseSelectedButton"
+        -AutomationId "ResolveReviewButton"
     Wait-UiaElementEnabled -Element $choose
     Invoke-UiaElement $choose
     return Wait-UiaWindow `

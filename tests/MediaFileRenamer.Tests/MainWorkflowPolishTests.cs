@@ -71,13 +71,13 @@ public sealed class MainWorkflowPolishTests
         AddSources(window, first, second);
         Assert.AreEqual("Move 2 files", apply.Content);
         Assert.AreEqual(
-            "Move 2 reviewed files",
+            "Move 2 files",
             AutomationProperties.GetName(apply));
 
         operation.SelectedIndex = 1;
         Assert.AreEqual("Copy 2 files", apply.Content);
         Assert.AreEqual(
-            "Copy 2 reviewed files",
+            "Copy 2 files",
             AutomationProperties.GetName(apply));
         window.Close();
     }

@@ -37,6 +37,22 @@ public partial class MainWindow
     private readonly List<FrameworkElement> _tvFields = [];
     private readonly List<FrameworkElement> _workspaceActions = [];
     private readonly StackPanel _customTools = new();
+    private readonly Expander _setupExpander = new();
+    private readonly TextBlock _setupSummary = new() { TextWrapping = TextWrapping.Wrap };
+    private Border _setupBorder = null!;
+    private readonly StackPanel _filterEmptyPanel = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(12), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _filterEmptyText = new() { TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, MaxWidth = 430 };
+    private Button _restoreClearedButton = null!;
+    private List<MediaPreviewItem>? _clearedBatch;
+    private string _clearedSelection = "";
+    private bool? _compactLayout;
+    private Grid _headingGrid = null!;
+    private StackPanel _headingButtons = null!;
+    private Grid _headingText = null!;
+    private Grid _mainWorkspaceGrid = null!;
+    private Grid _reviewGrid = null!;
+    private Grid _tablePanel = null!;
+    private Border _inspectionBorder = null!;
     private WrapPanel? _setupControls;
     private bool _workspaceReady;
     private bool _workspaceLoaded;
@@ -70,6 +86,7 @@ public partial class MainWindow
         // Reflow setup controls at narrow widths rather than scrolling the entire window.
         var setupGrid = (Grid)((StackPanel)OutputFolderLabel.Parent).Parent;
         var setupBorder = (Border)setupGrid.Parent;
+        _setupBorder = setupBorder;
         var setupChildren = setupGrid.Children.Cast<UIElement>().ToArray();
         setupGrid.Children.Clear();
         var setup = new WrapPanel();
@@ -80,11 +97,18 @@ public partial class MainWindow
             setup.Children.Add(child);
         }
         ((FrameworkElement)setupChildren[0]).Width = 320;
+        _setupExpander.Header = _setupSummary;
+        _setupExpander.IsExpanded = true;
+        AutomationProperties.SetName(_setupExpander, "Staging options");
+        AutomationProperties.SetAutomationId(_setupExpander, "StagingOptionsExpander");
         setupBorder.Child = setup;
         MatchAllButton.Style = (Style)FindResource(typeof(Button));
 
         var headingButtons = (StackPanel)AddFilesButton.Parent;
         var heading = (Grid)headingButtons.Parent;
+        _headingGrid = heading;
+        _headingButtons = headingButtons;
+        _mainWorkspaceGrid = (Grid)heading.Parent;
         heading.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         heading.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetColumn(headingButtons, 0);
@@ -93,6 +117,7 @@ public partial class MainWindow
         headingButtons.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
         headingButtons.Margin = new Thickness(0, 10, 0, 0);
         var headingText = heading.Children.OfType<Grid>().First();
+        _headingText = headingText;
         Grid.SetColumnSpan(headingText, 2);
         var reviewSummary = (StackPanel)ReviewCountTextBlock.Parent;
         var summaryGrid = (Grid)reviewSummary.Parent;
@@ -113,14 +138,23 @@ public partial class MainWindow
         ReviewGuidancePanel.Child = guidance;
 
         var toolbar = (WrapPanel)MatchSelectedButton.Parent;
+        // Batch filtering and navigation stay above the table. Selected-file actions
+        // live beside the filename comparison so the scope of each action is clear.
+        Detach(MatchSelectedButton);
+        Detach(ChooseSelectedButton);
+        Detach(RetryUnresolvedButton);
         toolbar.Children.Insert(0, _search);
         toolbar.Children.Insert(1, _groupShows);
         toolbar.Children.Insert(0, new TextBlock { Text = "Search", Margin = new Thickness(0, 10, 6, 0) });
         MainScrollViewer.ScrollChanged += (_, args) =>
         {
             if (args.ViewportWidthChange != 0)
+            {
                 OriginalGrid.Width = Math.Max(500, MainScrollViewer.ViewportWidth - 28);
+                UpdateCompactLayout(MainScrollViewer.ViewportWidth);
+            }
         };
+        MainScrollViewer.SizeChanged += (_, _) => UpdateCompactLayout(MainScrollViewer.ActualWidth);
         OriginalGrid.MinColumnWidth = 110;
         OriginalGrid.SizeChanged += (_, _) =>
         {
@@ -129,12 +163,29 @@ public partial class MainWindow
             OriginalGrid.Columns[0].Width = available / 2;
             OriginalGrid.Columns[2].Width = available / 2;
         };
-        toolbar.Children.Add(WorkspaceButton("Remove from batch", RemoveSelected_Click));
         var previous = WorkspaceButton("Previous review", (_, _) => NavigateReview(-1));
         var next = WorkspaceButton("Next review", (_, _) => NavigateReview(1));
         toolbar.Children.Add(previous);
         toolbar.Children.Add(next);
         toolbar.Children.Add(_queuePosition);
+        _restoreClearedButton = WorkspaceButton("Restore cleared batch", RestoreClearedBatch_Click);
+        AutomationProperties.SetAutomationId(_restoreClearedButton, "RestoreClearedBatchButton");
+        _restoreClearedButton.Visibility = Visibility.Collapsed;
+        headingButtons.Children.Add(_restoreClearedButton);
+        _tablePanel = (Grid)OriginalGrid.Parent;
+        _reviewGrid = (Grid)_tablePanel.Parent;
+        _reviewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _filterEmptyPanel.SetResourceReference(Panel.BackgroundProperty, "SurfaceBrush");
+        _filterEmptyText.SetResourceReference(TextBlock.ForegroundProperty, "MutedTextBrush");
+        _filterEmptyPanel.Children.Add(_filterEmptyText);
+        var showAll = WorkspaceButton("Show all files", (_, _) => ShowAllFiles());
+        showAll.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+        AutomationProperties.SetAutomationId(showAll, "ShowAllFilesButton");
+        showAll.Margin = new Thickness(0, 10, 0, 0);
+        _filterEmptyPanel.Children.Add(showAll);
+        AutomationProperties.SetLiveSetting(_filterEmptyText, AutomationLiveSetting.Polite);
+        AutomationProperties.SetName(_filterEmptyPanel, "Filtered batch status");
+        _tablePanel.Children.Add(_filterEmptyPanel);
         OriginalGrid.GroupStyle.Add(new GroupStyle
         {
             HeaderTemplate = (DataTemplate)System.Windows.Markup.XamlReader.Parse("<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'><TextBlock Text='{Binding Name}' Foreground='{DynamicResource TextBrush}' FontWeight='SemiBold' Margin='8,12,8,6'/></DataTemplate>")
@@ -158,6 +209,7 @@ public partial class MainWindow
         root.Children.Insert(1, footer);
 
         var editorParent = (StackPanel)SelectedFileEditor.Parent;
+        _inspectionBorder = (Border)editorParent.Parent;
         heading.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetRow(_completionPanel, 2);
         Grid.SetColumnSpan(_completionPanel, 2);
@@ -165,6 +217,17 @@ public partial class MainWindow
         editorParent.Children.Insert(0, _inspection);
         _inspection.Children.Add(new TextBlock { Text = "Filename preview · highlighted text changes", FontWeight = FontWeights.SemiBold });
         _inspection.Children.Add(_difference);
+        var selectedActions = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+        Detach(ResolveReviewButton);
+        Detach(ChooseDifferentShowButton);
+        selectedActions.Children.Add(ResolveReviewButton);
+        selectedActions.Children.Add(ChooseSelectedButton);
+        selectedActions.Children.Add(MatchSelectedButton);
+        selectedActions.Children.Add(WorkspaceButton("Remove from batch", RemoveSelected_Click));
+        _inspection.Children.Add(selectedActions);
+        ChooseSelectedButton.ToolTip = "Choose the correct movie or show for this file.";
+        var moreMatching = new Expander { Header = "More matching options", Content = RetryUnresolvedButton, Margin = new Thickness(0, 4, 0, 0) };
+        toolbar.Children.Add(moreMatching);
         var pathExpander = new Expander { Header = "Full paths and companion files", Content = new StackPanel() };
         var pathPanel = (StackPanel)pathExpander.Content;
         pathPanel.Children.Add(_paths);
@@ -251,6 +314,104 @@ public partial class MainWindow
         SizeChanged += (_, _) => ScheduleWorkspaceSave();
         _workspaceReady = true;
         RefreshWorkspaceDetails();
+    }
+
+    private void UpdateCompactLayout(double width)
+    {
+        if (!_workspaceReady || width <= 0) return;
+        var compact = width < 850;
+        if (_compactLayout == compact) return;
+        _compactLayout = compact;
+        _setupBorder.Child = null;
+        _setupExpander.Content = null;
+        if (compact)
+        {
+            _setupExpander.Content = _setupControls;
+            _setupBorder.Child = _setupExpander;
+        }
+        else _setupBorder.Child = _setupControls;
+        _setupExpander.IsExpanded = !compact;
+        _setupSummary.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
+        _mainWorkspaceGrid.MinHeight = compact ? 400 : 600;
+        Grid.SetRow(_headingButtons, compact ? 1 : 0);
+        Grid.SetColumn(_headingButtons, compact ? 0 : 1);
+        Grid.SetColumnSpan(_headingButtons, compact ? 2 : 1);
+        Grid.SetColumnSpan(_headingText, compact ? 2 : 1);
+        _headingButtons.Margin = new Thickness(0, compact ? 6 : 0, 0, 0);
+        _headingGrid.Margin = new Thickness(0, 0, 0, compact ? 8 : 14);
+        OriginalGrid.MinHeight = compact ? 130 : 200;
+        Detach(_inspectionBorder);
+        if (compact)
+        {
+            _reviewGrid.RowDefinitions[2].Height = GridLength.Auto;
+            _reviewGrid.RowDefinitions[3].Height = new GridLength(1, GridUnitType.Star);
+            Grid.SetRow(_inspectionBorder, 2);
+            Grid.SetRow(_tablePanel, 3);
+            _inspectionBorder.Margin = new Thickness(0, 0, 0, 8);
+            _inspectionBorder.Padding = new Thickness(10);
+            _reviewGrid.Children.Add(_inspectionBorder);
+        }
+        else
+        {
+            _reviewGrid.RowDefinitions[2].Height = new GridLength(1, GridUnitType.Star);
+            _reviewGrid.RowDefinitions[3].Height = GridLength.Auto;
+            Grid.SetRow(_tablePanel, 2);
+            Grid.SetRow(_inspectionBorder, 3);
+            _inspectionBorder.Margin = new Thickness(0, 14, 0, 0);
+            _inspectionBorder.Padding = new Thickness(16);
+            _mainWorkspaceGrid.Children.Add(_inspectionBorder);
+        }
+    }
+
+    private void ShowAllFiles()
+    {
+        if (_isBusy) return;
+        _search.Clear();
+        ReviewFilterComboBox.SelectedIndex = 0;
+        OriginalGrid.SelectedItem ??= PreviewItems.FirstOrDefault();
+        if (OriginalGrid.SelectedItem is not null) OriginalGrid.ScrollIntoView(OriginalGrid.SelectedItem);
+        RefreshWorkspaceDetails();
+    }
+
+    private void FocusNextUnresolved(int previousIndex)
+    {
+        var next = PreviewItems.Skip(previousIndex + 1).Concat(PreviewItems.Take(previousIndex + 1))
+            .FirstOrDefault(item => item.RequiresReview);
+        if (next is null)
+        {
+            RefreshWorkspaceDetails();
+            return;
+        }
+        _search.Clear();
+        ReviewFilterComboBox.SelectedIndex = 1;
+        OriginalGrid.SelectedItem = next;
+        OriginalGrid.ScrollIntoView(next);
+    }
+
+    private async void RestoreClearedBatch_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy || _clearedBatch is null) return;
+        await RunBusyAsync(RestoreClearedBatchAsync);
+    }
+
+    private async Task RestoreClearedBatchAsync()
+    {
+        if (_clearedBatch is null) return;
+        var saved = _clearedBatch.ToDictionary(item => item.SourcePath, StringComparer.OrdinalIgnoreCase);
+        var scanned = await Task.Run(() => _scanner.Scan(saved.Keys));
+        var restored = 0;
+        foreach (var item in scanned)
+        {
+            if (PreviewItems.Any(existing => string.Equals(existing.SourcePath, item.SourcePath, StringComparison.OrdinalIgnoreCase))) continue;
+            WorkspaceSessionService.RestoreDetails(saved[item.SourcePath], item);
+            AttachPreviewItem(item);
+            restored++;
+        }
+        _clearedBatch = null;
+        _search.Clear();
+        ReviewFilterComboBox.SelectedIndex = 0;
+        OriginalGrid.SelectedItem = PreviewItems.FirstOrDefault(item => item.SourcePath == _clearedSelection) ?? PreviewItems.FirstOrDefault();
+        StatusTextBlock.Text = $"Restored {restored} file(s); {saved.Count - restored} unavailable or already in the batch. Confirm restored details before applying.";
     }
 
     private void ScheduleWorkspaceSave()
@@ -362,8 +523,11 @@ public partial class MainWindow
         if (_isBusy) return;
         var items = PreviewItems.Where(item => item.RequiresReview).ToList();
         if (items.Count == 0) return;
-        var current = items.IndexOf(OriginalGrid.SelectedItem as MediaPreviewItem ?? items[0]);
-        var next = items[(current + direction + items.Count) % items.Count];
+        var selected = OriginalGrid.SelectedItem as MediaPreviewItem;
+        var selectedIndex = selected is null ? -1 : PreviewItems.IndexOf(selected);
+        var ordered = direction > 0 ? PreviewItems.ToList() : PreviewItems.Reverse().ToList();
+        var anchor = selectedIndex < 0 ? -1 : ordered.IndexOf(selected!);
+        var next = ordered.Skip(anchor + 1).Concat(ordered.Take(anchor + 1)).First(item => item.RequiresReview);
         // Navigation deliberately clears filters so the selected review is visible.
         _search.Clear();
         ReviewFilterComboBox.SelectedIndex = 1;
@@ -412,6 +576,19 @@ public partial class MainWindow
         var reviews = PreviewItems.Where(row => row.RequiresReview).ToList();
         var index = item is null ? -1 : reviews.IndexOf(item);
         var visible = CollectionViewSource.GetDefaultView(PreviewItems).Cast<object>().Count();
+        _filterEmptyPanel.Visibility = PreviewItems.Count > 0 && visible == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _filterEmptyText.Text = ReviewFilterComboBox.SelectedIndex == 1 && reviews.Count == 0
+            ? "Review complete — show all files to check the batch before moving or copying."
+            : "No files match these filters. Your batch is still here.";
+        _restoreClearedButton.Visibility = _clearedBatch is { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+        _setupSummary.Text = $"Staging: {Path.GetFileName(OutputFolderTextBox.Text.TrimEnd(Path.DirectorySeparatorChar))} · {GetOperationLabel()} · {((ComboBoxItem)PresetComboBox.SelectedItem).Content}";
+        _setupSummary.ToolTip = OutputFolderTextBox.Text;
+        _inspectionBorder.Visibility = item is not null || GetPreset() == RenamePreset.Custom ? Visibility.Visible : Visibility.Collapsed;
+        var canBrowseEpisodes = item?.MediaType == "TV" && (item.TmdbId is not null || item.TvdbId is not null)
+            && _settings.UseTmdbLookup && !string.IsNullOrWhiteSpace(_settings.TmdbApiKey);
+        ResolveReviewButton.Visibility = item?.RequiresReview == true ? Visibility.Visible : Visibility.Collapsed;
+        ChooseSelectedButton.Visibility = item?.RequiresReview != true || canBrowseEpisodes ? Visibility.Visible : Visibility.Collapsed;
+        ChooseSelectedButton.Content = canBrowseEpisodes ? "Choose Show..." : "Choose Match...";
         _queuePosition.Text = (index >= 0 ? $"Review {index + 1} of {reviews.Count}" : $"{reviews.Count} need review") + $" · {visible}/{PreviewItems.Count} shown";
         foreach (var field in _tvFields) field.Visibility = item?.MediaType == "TV" ? Visibility.Visible : Visibility.Collapsed;
         RememberShowMappingButton.Visibility = item?.MediaType == "TV" ? Visibility.Visible : Visibility.Collapsed;
@@ -423,9 +600,13 @@ public partial class MainWindow
                 "Remove from batch" => item is not null,
                 "Previous review" or "Next review" => reviews.Count > 0,
                 "Copy destination path" => !string.IsNullOrEmpty(item?.DestinationPath),
+                "Restore cleared batch" => _clearedBatch is { Count: > 0 },
                 _ => true
             } : true);
         if (_setupControls is not null) _setupControls.IsEnabled = !_isBusy;
+        _setupExpander.IsEnabled = !_isBusy;
+        ReviewFilterComboBox.IsEnabled = !_isBusy;
+        ChooseSelectedButton.Style = (Style)FindResource(item?.RequiresReview == true ? "PrimaryButtonStyle" : typeof(Button));
         _customTools.IsEnabled = !_isBusy;
         _search.IsEnabled = !_isBusy;
         _groupShows.IsEnabled = !_isBusy;
@@ -461,4 +642,6 @@ public partial class MainWindow
         }
         ScheduleWorkspaceSave();
     }
+
+    private string GetOperationLabel() => OperationComboBox.SelectedIndex == 1 ? "Copy" : "Move";
 }

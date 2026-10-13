@@ -121,11 +121,14 @@ public sealed class WorkspaceExperienceTests
         window.Close();
     }
 
-    [DataRow(640, 640)]
-    [DataRow(1024, 768)]
-    [DataRow(1360, 860)]
+    [DataRow(640, 640, false)]
+    [DataRow(1024, 768, false)]
+    [DataRow(1360, 860, false)]
+    [DataRow(640, 640, true)]
+    [DataRow(1024, 768, true)]
+    [DataRow(1360, 860, true)]
     [STATestMethod]
-    public void WorkspaceLayout_KeepsApplyVisibleAndRendersAtSupportedWidths(int width, int height)
+    public void WorkspaceLayout_KeepsApplyVisibleAndRendersAtSupportedWidths(int width, int height, bool needsReview)
     {
         WpfTestApplication.EnsureResources();
         using var temp = new TempDirectory();
@@ -135,7 +138,7 @@ public sealed class WorkspaceExperienceTests
         ((DataGrid)window.FindName("OriginalGrid")).ItemsSource = window.PreviewItems;
         Invoke(window, "AddSources", (object)new[] { source });
         window.PreviewItems[0].MatchedTitle = "Example Movie";
-        window.PreviewItems[0].Status = "Manual movie choice";
+        window.PreviewItems[0].Status = needsReview ? "Needs review" : "Manual movie choice";
         var root = (FrameworkElement)window.Content;
         root.SetResourceReference(System.Windows.Controls.Panel.BackgroundProperty, "AppBackgroundBrush");
         root.Measure(new Size(width, height));
@@ -147,6 +150,14 @@ public sealed class WorkspaceExperienceTests
         var bounds = apply.TransformToAncestor(root).TransformBounds(new Rect(apply.RenderSize));
         Assert.IsTrue(bounds.Left >= 0 && bounds.Right <= width && bounds.Bottom <= height);
         Assert.IsTrue(apply.ActualHeight >= 24);
+        if (width == 640)
+        {
+            var inspection = Field<StackPanel>(window, "_inspection");
+            var inspectionBounds = inspection.TransformToAncestor(root).TransformBounds(new Rect(inspection.RenderSize));
+            Assert.IsTrue(inspectionBounds.Top + 60 < bounds.Top, "The filename comparison must be visible above the fixed operation footer.");
+            if (!needsReview) Assert.IsTrue(inspectionBounds.Bottom < bounds.Top);
+            Assert.IsFalse(Field<Expander>(window, "_setupExpander").IsExpanded);
+        }
         Assert.AreEqual(Visibility.Collapsed, ((FrameworkElement)((FrameworkElement)window.FindName("SelectedSeasonTextBox")).Parent).Visibility);
 
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
@@ -155,8 +166,120 @@ public sealed class WorkspaceExperienceTests
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         var directory = Path.Combine(FindRoot(), "TestResults", "workspace-previews");
         Directory.CreateDirectory(directory);
-        using (var output = File.Create(Path.Combine(directory, $"workspace-{width}.png"))) encoder.Save(output);
+        using (var output = File.Create(Path.Combine(directory, $"workspace-{width}{(needsReview ? "-review" : "")}.png"))) encoder.Save(output);
         window.Close();
+    }
+
+    [STATestMethod]
+    public void ConfirmAndNext_FollowsQueuePositionAndOffersShowAllWhenFinished()
+    {
+        WpfTestApplication.EnsureResources();
+        using var temp = new TempDirectory();
+        var paths = new[] { temp.CreateFile("First.Movie.2024.mkv"), temp.CreateFile("Second.Movie.2024.mkv"), temp.CreateFile("Third.Movie.2024.mkv") };
+        var window = new MainWindow();
+        var grid = (DataGrid)window.FindName("OriginalGrid");
+        grid.ItemsSource = window.PreviewItems;
+        Invoke(window, "AddSources", (object)paths);
+        var first = window.PreviewItems[0];
+        var second = window.PreviewItems[1];
+        var third = window.PreviewItems[2];
+        ((ComboBox)window.FindName("ReviewFilterComboBox")).SelectedIndex = 1;
+        grid.SelectedItem = second;
+        Invoke(window, "ConfirmManualDetails_Click", window, new RoutedEventArgs());
+        Assert.AreSame(third, grid.SelectedItem);
+        Invoke(window, "ConfirmManualDetails_Click", window, new RoutedEventArgs());
+        Assert.AreSame(first, grid.SelectedItem);
+        Invoke(window, "ConfirmManualDetails_Click", window, new RoutedEventArgs());
+        Assert.AreEqual(0, CollectionViewSource.GetDefaultView(window.PreviewItems).Cast<object>().Count());
+        Assert.AreEqual(Visibility.Visible, Field<StackPanel>(window, "_filterEmptyPanel").Visibility);
+        StringAssert.Contains(Field<TextBlock>(window, "_filterEmptyText").Text, "Review complete");
+        Assert.AreEqual(Visibility.Collapsed, ((Border)window.FindName("EmptyDropPanel")).Visibility);
+        Assert.IsTrue(((Button)window.FindName("RenameButton")).IsEnabled);
+        Invoke(window, "ShowAllFiles");
+        Assert.AreEqual(3, CollectionViewSource.GetDefaultView(window.PreviewItems).Cast<object>().Count());
+        Assert.AreSame(first, grid.SelectedItem);
+        Assert.AreEqual(Visibility.Collapsed, Field<StackPanel>(window, "_filterEmptyPanel").Visibility);
+        window.Close();
+    }
+
+    [STATestMethod]
+    public void SearchWithoutResults_ExplainsFiltersWithoutPretendingBatchIsEmpty()
+    {
+        WpfTestApplication.EnsureResources();
+        using var temp = new TempDirectory();
+        var window = new MainWindow();
+        ((DataGrid)window.FindName("OriginalGrid")).ItemsSource = window.PreviewItems;
+        Invoke(window, "AddSources", (object)new[] { temp.CreateFile("Movie.2024.mkv") });
+        Field<TextBox>(window, "_search").Text = "not a matching filename";
+        Assert.AreEqual(Visibility.Visible, Field<StackPanel>(window, "_filterEmptyPanel").Visibility);
+        StringAssert.Contains(Field<TextBlock>(window, "_filterEmptyText").Text, "No files match");
+        Assert.IsFalse(((Button)window.FindName("RenameButton")).IsEnabled);
+        Invoke(window, "ShowAllFiles");
+        Assert.AreEqual(1, CollectionViewSource.GetDefaultView(window.PreviewItems).Cast<object>().Count());
+        window.Close();
+    }
+
+    [STATestMethod]
+    public void ClearedBatchRestore_RescansSourcesAndRequiresReviewWithoutOverwritingNewRows()
+    {
+        WpfTestApplication.EnsureResources();
+        using var temp = new TempDirectory();
+        var firstPath = temp.CreateFile("First.Movie.2024.mkv");
+        var missingPath = temp.CreateFile("Missing.Movie.2024.mkv");
+        var window = new MainWindow();
+        var grid = (DataGrid)window.FindName("OriginalGrid");
+        grid.ItemsSource = window.PreviewItems;
+        Invoke(window, "AddSources", (object)new[] { firstPath, missingPath });
+        var first = window.PreviewItems[0];
+        first.MatchedTitle = "Manual correction";
+        first.Status = "Manual movie choice";
+        Invoke(window, "Clear_Click", window, new RoutedEventArgs());
+        Assert.AreEqual(0, window.PreviewItems.Count);
+        Assert.IsTrue(File.Exists(firstPath));
+        Assert.IsTrue(File.Exists(missingPath));
+        Assert.AreEqual(Visibility.Visible, Field<Button>(window, "_restoreClearedButton").Visibility);
+        File.Delete(missingPath);
+        temp.CreateFile("First.Movie.2024.en.srt");
+        var extraPath = temp.CreateFile("New.Movie.2024.mkv");
+        Invoke(window, "AddSources", (object)new[] { extraPath });
+        var previousContext = SynchronizationContext.Current;
+        Task task;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext(window.Dispatcher));
+            task = (Task)typeof(MainWindow).GetMethod("RestoreClearedBatchAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null)!;
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        _ = task.ContinueWith(_ => window.Dispatcher.BeginInvoke(new Action(() => frame.Continue = false)), TaskScheduler.Default);
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+        task.GetAwaiter().GetResult();
+        Invoke(window, "UpdateActionState");
+        Assert.AreEqual(2, window.PreviewItems.Count);
+        var restored = window.PreviewItems.Single(item => item.SourcePath == firstPath);
+        Assert.AreEqual("Manual correction", restored.MatchedTitle);
+        Assert.AreEqual(1, restored.CompanionCount);
+        Assert.IsTrue(restored.RequiresReview);
+        Assert.IsFalse(((Button)window.FindName("RenameButton")).IsEnabled);
+        Assert.AreEqual(Visibility.Collapsed, Field<Button>(window, "_restoreClearedButton").Visibility);
+        Assert.IsTrue(File.Exists(firstPath));
+        window.Close();
+    }
+
+    [TestMethod]
+    public void BatchRematching_IncludesProviderMatchesAndProtectsManualEpisodesUnlessExplicitlyIncluded()
+    {
+        var automatic = new MediaPreviewItem { Status = "TMDB auto 99%", TmdbId = 123 };
+        var manual = new MediaPreviewItem { MediaType = "TV", Season = 1, Episode = 1, Status = "Manual TV details confirmed", TmdbId = 456 };
+        var unresolved = new MediaPreviewItem { Status = "Needs review", TmdbId = 789 };
+        var items = new[] { automatic, manual, unresolved };
+        var protectedTargets = MainWindow.GetBatchRematchItems(items, false);
+        CollectionAssert.AreEqual(new[] { automatic, unresolved }, protectedTargets);
+        Assert.IsFalse(MainWindow.CanUpdateRelatedEpisode(manual, protectedTargets.ToHashSet()));
+        Assert.IsFalse(MainWindow.CanUpdateRelatedEpisode(manual, null));
+        var allTargets = MainWindow.GetBatchRematchItems(items, true);
+        CollectionAssert.AreEqual(items, allTargets);
+        Assert.IsTrue(MainWindow.CanUpdateRelatedEpisode(manual, allTargets.ToHashSet()));
     }
 
     [STATestMethod]
