@@ -136,7 +136,7 @@ gh attestation verify .\MediaFileRenamer-win-x64.zip --repo chris-lansman/media-
 
 ## Versions and releases
 
-Release tags use semantic versions such as `v1.1.1`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; manually triggered non-tag packages receive a `1.1.5-ci.<run>` version. On startup, the app checks the latest GitHub Release and, when available, offers an in-app download that verifies the published SHA-256 checksum, safely replaces the portable app files, and restarts. The manual **Help → About → Check for updates** route remains available. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
+Release tags use semantic versions such as `v1.1.11`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; manually triggered non-tag packages receive the current project version with a `-ci.<run>` suffix. On startup, the app checks the latest GitHub Release and, when available, offers an in-app download that verifies the published SHA-256 checksum, safely replaces the portable app files, and restarts. The manual **Help → About → Check for updates** route remains available. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
 
 The release workflow verifies formatting, treats compiler warnings as errors, runs the full test suite, audits vulnerable and deprecated NuGet dependencies, publishes a self-contained Windows x64 package, starts that exact published executable as a smoke test, exercises its real post-exit updater handoff and relaunch, and verifies its SHA-256 checksum.
 

@@ -65,7 +65,7 @@ try {
     } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $planPath -NoNewline
 
     $helperPath = Join-Path $helperDirectory 'MediaFileRenamer.exe'
-    $helper = Start-Process -FilePath $helperPath -ArgumentList @('--apply-update-plan', $planPath) -PassThru
+    $helper = Start-Process -FilePath $helperPath -ArgumentList @('--apply-update-plan', $planPath) -PassThru -WindowStyle Hidden
     if (-not $helper.WaitForExit($TimeoutSeconds * 1000)) {
         throw "The update helper did not exit within $TimeoutSeconds seconds."
     }
@@ -110,6 +110,12 @@ finally {
     }
 
     if (Test-Path -LiteralPath $runRoot) {
+        $resolvedRunRoot = [IO.Path]::GetFullPath($runRoot)
+        $expectedParent = [IO.Path]::GetFullPath($env:TEMP).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+        if ((-not $resolvedRunRoot.StartsWith($expectedParent, [StringComparison]::OrdinalIgnoreCase)) -or
+            ([IO.Path]::GetFileName($resolvedRunRoot) -notmatch '^MediaFileRenamer-update-handoff-[0-9a-f]{32}$')) {
+            throw 'Refusing to remove an unexpected update-test directory.'
+        }
         Remove-Item -LiteralPath $runRoot -Recurse -Force
     }
 }

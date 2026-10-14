@@ -27,3 +27,11 @@ Automated validation covers the existing rename/recovery safeguards plus session
 - Package: `dist/MediaFileRenamer-ux-preview-win-x64.zip`, with its adjacent SHA-256 file. Test evidence is under `TestResults/UX-refinements.trx`, `TestResults/workspace-previews`, and `TestResults/ux-preview-smoke`.
 - Dependency audit: no vulnerable packages found. The deprecation gate fails on existing test dependencies (`MSTest.TestAdapter`, `MSTest.TestFramework`, `MSTest.Analyzers`, and `Microsoft.Testing.Platform.MSBuild`); this UI pass does not migrate the test platform.
 - Remaining manual acceptance: personal provider lookups, actual Windows display scaling/themes, and the checklist above using disposable media. The local UI smoke did not move or copy real media or change normal app settings.
+
+## 1.1.11 release preparation — 2026-10-13
+
+- MSTest.Sdk 4.5.1 resolves the earlier deprecation gate. Strict Release build, formatting, 212 tests, and vulnerable/deprecated dependency audits pass.
+- Candidate: `dist/MediaFileRenamer-1.1.11/MediaFileRenamer.exe`. Isolated startup and both packaged workspace save/reopen cycles pass, including Clear batch restoration and the fresh-review gate.
+- Portable update handoff passes: the helper replaces an intentionally stale runtime file, verifies the package, and relaunches using isolated app data.
+- Disposable local file-operation acceptance passes copy/move with companions, timestamp preservation/Undo, collisions, cancellation rollback, and crash recovery. Evidence is under `TestResults/release-1.1.11-file-operations` and `TestResults/release-1.1.11-workspace`.
+- Prior manual acceptance limits remain; this preparation does not repeat personal-provider, display-setting, or disposable UNC acceptance.

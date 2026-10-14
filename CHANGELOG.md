@@ -5,6 +5,8 @@ Notable user-visible changes are recorded here. This project follows
 
 ## Unreleased
 
+## 1.1.11 - 2026-10-13
+
 ### Added
 
 - Clear batch restoration within the current session, with rescanned sources and companions and fresh review before transfer.
