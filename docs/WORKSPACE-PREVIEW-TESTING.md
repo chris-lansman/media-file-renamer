@@ -1,0 +1,37 @@
+# Review workspace preview
+
+Run `dist/MediaFileRenamer-ux-preview/MediaFileRenamer.exe` from this checkout. This is a separate self-contained test build, version `1.1.11-preview.2`. It uses your normal app settings and saves the review workspace locally; it is not a published release.
+
+Use a small disposable batch first. Close any other copy of the app before testing session restoration.
+
+1. Add movies and TV episodes, including a subtitle with the same filename stem. Search, switch filters, and enable show/season grouping. Review counts must still describe the entire batch.
+2. Select a row. Inspect highlighted filename changes, expand full paths and companions, copy a path, and open the source folder.
+3. Use Previous/Next review. Start in the middle of a batch, correct a flagged row under Edit media details and Confirm and next. It should continue forward and wrap to earlier unresolved rows. Movies should hide TV-specific fields. After the last flagged row, the Needs review filter should show a review-complete explanation; Show all files should return to the whole batch.
+4. Remove one row from the batch and verify its original file remains on disk.
+5. Choose Custom token format. Insert tokens, check the live example, and try an unknown token such as `{Ttile}`. The inline error should explain the problem and prevent applying an invalid destination.
+6. Resize the window, adjust columns, leave some edited rows staged, and close/reopen. Existing files and edits should return; restored rows must require confirmation. Clear the batch when you want to discard it.
+7. Copy the reviewed batch to a disposable output folder. The completion panel should show the result, folder shortcut, cleanup details, and Undo. Confirm Undo removes only the copied output, leaving the originals intact.
+8. Check the UI with your normal Windows theme and display scale. The final action should stay visible when the content scrolls.
+9. Clear batch, then Restore cleared batch. Corrections should return, sources should remain unchanged, and fresh confirmation should be required. New rows added after clearing must remain. The shortcut applies only to the most recently cleared batch in this session.
+10. Re-match All with a mixture of automatic and manual choices. Keep the manual choices once, including related TV episodes; then explicitly include them in a second run. Existing automatic matches should be looked up again.
+11. At a narrow width, expand Staging options to change operation or folder. The filename comparison should appear above the table, and readiness wording should track Move versus Copy without implying a person reviewed automatic matches.
+
+Automated validation covers the existing rename/recovery safeguards plus session serialization, fresh-review restoration, search/filter gating, removal without deletion, grouping, companion destinations, busy-state restrictions, naming validation, and rendered layouts at 640, 1024, and 1360 pixels wide.
+
+## Local validation — 2026-10-13
+
+- Preview: `1.1.11-preview.2`, application source commit `c56a160`.
+- Strict Release build: 0 warnings, 0 errors. Formatting verification and `git diff --check` passed.
+- Test suite: 212 passed, 0 failed. The new cases cover forward/wrapping confirmation, empty filters, clear/restore with missing sources and new companions, manual-choice protection, and ready/unresolved renders at all three supported widths.
+- The exact self-contained executable passed two isolated UI Automation save/reopen cycles plus Clear batch → Restore cleared batch. The disposable source fixture stayed unchanged and applying remained disabled until fresh review.
+- Package: `dist/MediaFileRenamer-ux-preview-win-x64.zip`, with its adjacent SHA-256 file. Test evidence is under `TestResults/UX-refinements.trx`, `TestResults/workspace-previews`, and `TestResults/ux-preview-smoke`.
+- Dependency audit: no vulnerable packages found. The deprecation gate fails on existing test dependencies (`MSTest.TestAdapter`, `MSTest.TestFramework`, `MSTest.Analyzers`, and `Microsoft.Testing.Platform.MSBuild`); this UI pass does not migrate the test platform.
+- Remaining manual acceptance: personal provider lookups, actual Windows display scaling/themes, and the checklist above using disposable media. The local UI smoke did not move or copy real media or change normal app settings.
+
+## 1.1.11 release preparation — 2026-10-13
+
+- MSTest.Sdk 4.5.1 resolves the earlier deprecation gate. Strict Release build, formatting, 212 tests, and vulnerable/deprecated dependency audits pass.
+- Candidate: `dist/MediaFileRenamer-1.1.11/MediaFileRenamer.exe`. Isolated startup and both packaged workspace save/reopen cycles pass, including Clear batch restoration and the fresh-review gate.
+- Portable update handoff passes: the helper replaces an intentionally stale runtime file, verifies the package, and relaunches using isolated app data.
+- Disposable local file-operation acceptance passes copy/move with companions, timestamp preservation/Undo, collisions, cancellation rollback, and crash recovery. Evidence is under `TestResults/release-1.1.11-file-operations` and `TestResults/release-1.1.11-workspace`.
+- Prior manual acceptance limits remain; this preparation does not repeat personal-provider, display-setting, or disposable UNC acceptance.

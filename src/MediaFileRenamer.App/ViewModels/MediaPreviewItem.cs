@@ -40,6 +40,7 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
     public int GroupFileCount { get; set; } = 1;
     public string SourceFileName => Path.GetFileNameWithoutExtension(SourcePath);
     public string SourceFolder => Path.GetDirectoryName(SourcePath) ?? "";
+    public string ReviewGroup => MediaType == "TV" ? $"{MatchedTitle} · Season {Season:00}" : "Movies / other media";
     public string Extension { get; init; } = "";
     public string ExtensionLabel => Extension.TrimStart('.').ToUpperInvariant();
     public List<string> CompanionPaths { get; } = [];
@@ -281,25 +282,25 @@ public sealed class MediaPreviewItem : INotifyPropertyChanged
 
             if (MatchState == "Ready to match")
             {
-                return "Choose a metadata match, retry matching, or confirm the Selected file details below.";
+                return "Choose a metadata match, retry matching, or open Edit media details and confirm your changes.";
             }
 
             if (MediaType == "TV" && (TmdbId is not null || TvdbId is not null))
             {
-                return "Browse the matched show's episodes, or edit the Selected file fields below and confirm your details.";
+                return "Browse the matched show's episodes, or open Edit media details and confirm your changes.";
             }
 
             if (MediaType == "TV")
             {
-                return "Choose the correct show first, or edit the Selected file fields below and confirm your details.";
+                return "Choose the correct show first, or open Edit media details and confirm your changes.";
             }
 
             if (MediaType == "Unknown")
             {
-                return "Choose a metadata match, or set the type and complete the Selected file fields below manually.";
+                return "Choose a metadata match, or open Edit media details to set the type and complete the fields manually.";
             }
 
-            return "Choose a different match, or confirm the edited details in Selected file below.";
+            return "Choose a different match, or open Edit media details and confirm your changes.";
         }
     }
 

@@ -13,6 +13,7 @@ public enum RenamePreset
 
 public sealed class RenamePlanner
 {
+    internal static readonly string[] FormatTokens = ["Title", "Year", "Season", "Episode", "EpisodeEnd", "AirDate", "AbsoluteEpisode", "Part", "EpisodeTitle", "TmdbId", "TvdbId", "ProviderId", "Edition", "EditionTag"];
     private static readonly HashSet<string> ReservedWindowsNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "CON", "PRN", "AUX", "NUL",
@@ -117,6 +118,14 @@ public sealed class RenamePlanner
 
     private static string BuildCustomPath(MediaPreviewItem item, string pattern, string extension)
     {
+        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(pattern, @"\{([^{}]*)\}"))
+        {
+            if (!FormatTokens.Contains(match.Groups[1].Value, StringComparer.OrdinalIgnoreCase))
+                throw new ArgumentException($"Unknown naming token {match.Value}. Choose a token from the list.");
+        }
+        var withoutTokens = System.Text.RegularExpressions.Regex.Replace(pattern, @"\{[^{}]*\}", "");
+        if (withoutTokens.Contains('{') || withoutTokens.Contains('}'))
+            throw new ArgumentException("Complete each naming token with opening and closing braces.");
         if (string.IsNullOrWhiteSpace(pattern))
         {
             pattern = item.MediaType == "TV"

@@ -8,7 +8,22 @@ A Windows desktop app for staging Plex-friendly movie and TV filenames before mo
 2. Choose an output folder. The default is `%USERPROFILE%\renamed-media`.
 3. Pick `Move to staged folder` or `Copy to staged folder`.
 4. Use the Plex preset, flat review preset, or a custom token format.
-5. Click `Match All`, review every destination beside its original file, then click `Apply Rename`.
+5. New files match automatically. Review proposed destinations and resolve flagged rows, then use the **Move N files** or **Copy N files** button. **Re-match All** is available when you want to repeat matching.
+
+## Review workspace
+
+- Search staged filenames, titles, and source folders, or group rows by show and season. The review counter covers the whole batch, including rows hidden by filters.
+- **Previous review** and **Next review** clear search filters and navigate flagged files. Expand **Edit media details** to make corrections, then use **Confirm and next**, which continues forward from the selected file and wraps around. TV fields appear only for TV files.
+- Select a row to compare filenames: removed text is struck through and replacement text is highlighted. Expand **Full paths and companion files** to inspect exact destinations, copy paths, open folders, and inspect subtitle/artwork/NFO renames.
+- Selected-file actions sit beside the filename comparison; filters and review navigation stay above the table. **More matching options** contains the batch retry action. Narrow windows summarize staging options in an expandable panel and put the selected-file comparison above the table.
+- **Ready to move/copy** means no items need attention; automatic matches still deserve a final visual check. A filtered batch with no results explains why, and **Show all files** returns to the whole batch after review is complete.
+- **Re-match All** repeats provider matching even for existing automatic matches. If manual choices exist, choose whether to keep or replace them; kept manual TV choices are also protected from related-show updates.
+- **Remove from batch** removes only the selected queue entry; it does not delete media. **Clear batch** empties the queue and offers **Restore cleared batch** during the current session. Restoration rescans sources and companions, keeps new queue entries, and requires fresh review. Only the most recently cleared batch is retained, and closing the app discards that restoration shortcut.
+- The final move/copy action stays at the bottom of the window. After a successful operation, a completion panel offers the destination folder, Undo, and expandable cleanup details.
+- Custom naming offers clickable tokens, a live filename example, and validation for unknown or incomplete tokens.
+- Unfinished review details, window size, column widths, output folder, operation, and naming preset are saved locally in `%LOCALAPPDATA%\MediaFileRenamer\workspace.json`. Restoring rescans existing source files and companions and requires fresh review; it never resumes a transfer automatically. Missing sources are reported. Clear the queue and close the app to discard a saved batch.
+
+Workspace files contain local paths and review metadata, but no provider credentials. Interrupted transfers continue to use the separate Operation History and Recovery Center safeguards.
 
 Uncertain files are searched as both movies and TV shows. TMDB and TVDB candidates are merged when the first result is missing or ambiguous, and TVDB-only series are retained instead of being discarded. Clear matches are selected automatically; close results open the poster picker with provider IDs, confidence, and the evidence behind the score. You can also use `Choose...` to force the picker or manually classify an unmatched file as a movie or TV episode. Local Movie/TV classification remains available when no TMDB key is configured.
 
@@ -121,7 +136,7 @@ gh attestation verify .\MediaFileRenamer-win-x64.zip --repo chris-lansman/media-
 
 ## Versions and releases
 
-Release tags use semantic versions such as `v1.1.1`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; manually triggered non-tag packages receive a `1.1.5-ci.<run>` version. On startup, the app checks the latest GitHub Release and, when available, offers an in-app download that verifies the published SHA-256 checksum, safely replaces the portable app files, and restarts. The manual **Help → About → Check for updates** route remains available. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
+Release tags use semantic versions such as `v1.1.11`. Tagged builds embed the tag version in the executable and create a permanent GitHub Release; manually triggered non-tag packages receive the current project version with a `-ci.<run>` suffix. On startup, the app checks the latest GitHub Release and, when available, offers an in-app download that verifies the published SHA-256 checksum, safely replaces the portable app files, and restarts. The manual **Help → About → Check for updates** route remains available. User-visible changes are maintained in [CHANGELOG.md](CHANGELOG.md).
 
 The release workflow verifies formatting, treats compiler warnings as errors, runs the full test suite, audits vulnerable and deprecated NuGet dependencies, publishes a self-contained Windows x64 package, starts that exact published executable as a smoke test, exercises its real post-exit updater handoff and relaunch, and verifies its SHA-256 checksum.
 

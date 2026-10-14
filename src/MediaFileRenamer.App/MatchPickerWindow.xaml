@@ -107,7 +107,7 @@
                             </Grid.ColumnDefinitions>
 
                             <Border Grid.Column="0" Width="78" Height="116" Background="{DynamicResource SurfaceMutedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4">
-                                <Image Source="{Binding PosterUrl}" Stretch="UniformToFill"/>
+                                <Grid><TextBlock Text="No artwork" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}"/><Image Source="{Binding PosterUrl}" Stretch="UniformToFill"/></Grid>
                             </Border>
 
                             <StackPanel Grid.Column="1" Margin="14,0,0,0">

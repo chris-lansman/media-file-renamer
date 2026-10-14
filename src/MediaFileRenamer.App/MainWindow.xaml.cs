@@ -43,6 +43,7 @@ public partial class MainWindow : Window
         OperationComboBox.SelectedIndex =
             _settings.DefaultOperation == FileOperation.Copy ? 1 : 0;
         DataContext = this;
+        InitializeReviewWorkspace();
         UpdateCustomFormatVisibility();
         UpdateActionState();
     }
@@ -50,6 +51,7 @@ public partial class MainWindow : Window
     protected override async void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
+        await RestoreWorkspaceAsync();
         var recoveries = await GetStartupRecoveriesAsync();
         if (recoveries is { Count: > 0 })
         {
@@ -116,12 +118,36 @@ public partial class MainWindow : Window
 
     private async Task MatchAllAsync()
     {
+        var manualCount = PreviewItems.Count(item => item.MatchState == "Manual choice");
+        var includeManualChoices = false;
+        if (manualCount > 0)
+        {
+            var choice = System.Windows.MessageBox.Show(this,
+                $"This batch contains {manualCount} manually chosen file(s). Replace those choices when re-matching?\n\n"
+                + "Yes: re-match every file, including manual choices.\n"
+                + "No: re-match automatic and unresolved files; keep manual choices.\n"
+                + "Cancel: keep the batch as it is.",
+                "Re-match batch", MessageBoxButton.YesNoCancel, MessageBoxImage.Question,
+                MessageBoxResult.No);
+            if (choice == MessageBoxResult.Cancel) return;
+            includeManualChoices = choice == MessageBoxResult.Yes;
+        }
+        var targets = GetBatchRematchItems(PreviewItems, includeManualChoices);
+        if (targets.Count == 0)
+        {
+            StatusTextBlock.Text = "All files have manual choices. Those choices were kept.";
+            return;
+        }
         await MatchItemsAsync(
-            PreviewItems.ToList(),
-            retryExistingMatches: false,
+            targets,
+            retryExistingMatches: true,
             showPickerForUncertain: false,
-            progressMessage: "Matching all files with configured providers...");
+            progressMessage: "Re-matching the batch with configured providers...",
+            relatedTargets: targets.ToHashSet());
     }
+
+    internal static List<MediaPreviewItem> GetBatchRematchItems(IEnumerable<MediaPreviewItem> items, bool includeManualChoices) =>
+        items.Where(item => includeManualChoices || item.MatchState != "Manual choice").ToList();
 
     private async void RetryUnresolved_Click(object sender, RoutedEventArgs e)
     {
@@ -148,7 +174,8 @@ public partial class MainWindow : Window
         IReadOnlyList<MediaPreviewItem> items,
         bool retryExistingMatches,
         bool showPickerForUncertain,
-        string progressMessage)
+        string progressMessage,
+        IReadOnlySet<MediaPreviewItem>? relatedTargets = null)
     {
         var key = _settings.TmdbApiKey.Trim();
         var useTmdb = _settings.UseTmdbLookup && !string.IsNullOrWhiteSpace(key);
@@ -183,7 +210,8 @@ public partial class MainWindow : Window
                         resolutionClient,
                         tvdbClient,
                         item,
-                        selected);
+                        selected,
+                        relatedTargets);
                 }
             }
 
@@ -365,11 +393,13 @@ public partial class MainWindow : Window
 
     private void ConfirmManualDetails_Click(object sender, RoutedEventArgs e)
     {
+        if (_isBusy) return;
         if (OriginalGrid.SelectedItem is not MediaPreviewItem item)
         {
             return;
         }
 
+        var index = PreviewItems.IndexOf(item);
         if (!TryConfirmManualDetails(item, out var validationMessage))
         {
             System.Windows.MessageBox.Show(
@@ -384,7 +414,7 @@ public partial class MainWindow : Window
         UpdateDestination(item);
         StatusTextBlock.Text = $"Confirmed the edited details for {item.SourceFileName}.";
         UpdateActionState();
-        FocusFirstUnresolved();
+        FocusNextUnresolved(index);
     }
 
     internal static bool TryConfirmManualDetails(
@@ -439,6 +469,12 @@ public partial class MainWindow : Window
         if (unresolved is null)
         {
             return false;
+        }
+
+        if (!CollectionViewSource.GetDefaultView(PreviewItems).Contains(unresolved))
+        {
+            _search.Clear();
+            ReviewFilterComboBox.SelectedIndex = 1;
         }
 
         OriginalGrid.SelectedItem = unresolved;
@@ -538,6 +574,10 @@ public partial class MainWindow : Window
             return;
         }
 
+        _completedDestination = OutputFolderTextBox.Text;
+        _completionText.Text = $"{(operation == FileOperation.Copy ? "Copied" : "Moved")} {result.CompletedItems.Count} media file(s).";
+        _completionDetails.Text = $"Destination: {_completedDestination}\nRemoved {result.DeletedSourceFolders} empty source folder(s).\n" + string.Join(Environment.NewLine, result.CleanupWarnings);
+        _completionPanel.Visibility = Visibility.Visible;
         RemoveCompletedItems(result.CompletedItems);
 
         var failedCount = PreviewItems.Count;
@@ -558,10 +598,13 @@ public partial class MainWindow : Window
 
     private void Clear_Click(object sender, RoutedEventArgs e)
     {
+        if (_isBusy || PreviewItems.Count == 0) return;
+        _clearedBatch = PreviewItems.Select(item => item.CreateTransferSnapshot()).ToList();
+        _clearedSelection = (OriginalGrid.SelectedItem as MediaPreviewItem)?.SourcePath ?? "";
         OriginalGrid.SelectedItem = null;
         PreviewItems.Clear();
 
-        StatusTextBlock.Text = "Cleared.";
+        StatusTextBlock.Text = "Batch cleared. Source files are unchanged. Use Restore cleared batch to recover the review.";
         UpdateActionState();
     }
 
@@ -628,6 +671,11 @@ public partial class MainWindow : Window
         RenameButton.IsEnabled = enabled;
         ReviewGuidancePanel.IsEnabled = enabled;
         SelectedFileEditor.IsEnabled = enabled;
+        OriginalGrid.IsEnabled = enabled;
+        OutputFolderTextBox.IsEnabled = enabled;
+        OperationComboBox.IsEnabled = enabled;
+        PresetComboBox.IsEnabled = enabled;
+        RefreshWorkspaceDetails();
     }
 
     private void UpdateActionState()
@@ -658,6 +706,10 @@ public partial class MainWindow : Window
         var selectedItem = OriginalGrid.SelectedItem as MediaPreviewItem;
         var hasSelection = selectedItem is not null;
         var reviewCount = PreviewItems.Count(item => item.RequiresReview);
+        OriginalGrid.IsEnabled = true;
+        OutputFolderTextBox.IsEnabled = true;
+        OperationComboBox.IsEnabled = true;
+        PresetComboBox.IsEnabled = true;
         AddFilesButton.IsEnabled = true;
         AddFolderButton.IsEnabled = true;
         ClearButton.IsEnabled = hasItems;
@@ -693,17 +745,18 @@ public partial class MainWindow : Window
         RenameButton.Content = $"{operation} {PreviewItems.Count} {fileNoun}";
         AutomationProperties.SetName(
             RenameButton,
-            $"{operation} {PreviewItems.Count} reviewed {fileNoun}");
+            $"{operation} {PreviewItems.Count} {fileNoun}");
 
         ReviewCountTextBlock.Text = !hasItems
             ? "Add files to begin"
             : reviewCount == 0
-                ? "All items reviewed"
+                ? $"Ready to {operation.ToLowerInvariant()}"
                 : reviewCount == 1
                     ? "1 item needs review"
                     : $"{reviewCount} items need review";
         ReviewCountTextBlock.Foreground = (System.Windows.Media.Brush)FindResource(
             !hasItems ? "MutedTextBrush" : reviewCount == 0 ? "MatchBrush" : "ReviewBrush");
+        RefreshWorkspaceDetails();
     }
 
     private void RemoveCompletedItems(IEnumerable<MediaPreviewItem> completedItems)
@@ -799,6 +852,7 @@ public partial class MainWindow : Window
 
     private void ShowSettings(bool isFirstRun)
     {
+        if (_isBusy) return;
         var window = new SettingsWindow(
             _settings,
             _settingsService.SettingsPath,
@@ -831,6 +885,7 @@ public partial class MainWindow : Window
 
     private void OperationHistoryMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        if (_isBusy) return;
         var window = new OperationHistoryWindow(_journalService)
         {
             Owner = this
@@ -840,6 +895,7 @@ public partial class MainWindow : Window
 
     private void RecoveryCenterMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        if (_isBusy) return;
         ShowRecoveryCenter();
     }
 
@@ -902,8 +958,9 @@ public partial class MainWindow : Window
         }.ShowDialog();
     }
 
-    private void UndoLastOperationMenuItem_Click(object sender, RoutedEventArgs e)
+    private async void UndoLastOperationMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        if (_isBusy) return;
         var confirmation = System.Windows.MessageBox.Show(
             this,
             "Undo the most recent completed move or copy operation? "
@@ -916,14 +973,20 @@ public partial class MainWindow : Window
             return;
         }
 
-        var result = _journalService.UndoLastCompleted();
-        StatusTextBlock.Text = result.Message;
-        System.Windows.MessageBox.Show(
-            this,
-            result.Message,
-            result.Success ? "Undo complete" : "Undo unavailable",
-            MessageBoxButton.OK,
-            result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        await RunBusyAsync(async () =>
+        {
+            CancelOperationButton.Visibility = Visibility.Collapsed;
+            StatusTextBlock.Text = "Undoing the last operation...";
+            var result = await Task.Run(_journalService.UndoLastCompleted);
+            StatusTextBlock.Text = result.Message;
+            System.Windows.MessageBox.Show(
+                this,
+                result.Message,
+                result.Success ? "Undo complete" : "Undo unavailable",
+                MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            _completionPanel.Visibility = Visibility.Collapsed;
+        });
     }
 
     private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
@@ -968,15 +1031,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        ICollectionView view = CollectionViewSource.GetDefaultView(PreviewItems);
-        view.Filter = ReviewFilterComboBox.SelectedIndex switch
-        {
-            1 => item => item is MediaPreviewItem preview && preview.RequiresReview,
-            2 => item => item is MediaPreviewItem preview && preview.MatchState == "Matched",
-            3 => item => item is MediaPreviewItem preview && preview.MatchState == "Blocked",
-            _ => null
-        };
-        view.Refresh();
+        ApplyWorkspaceFilter();
     }
 
     private void OutputFolderTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -1102,27 +1157,7 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            item.PropertyChanged += (_, args) =>
-            {
-                if (args.PropertyName is nameof(MediaPreviewItem.MatchedTitle)
-                    or nameof(MediaPreviewItem.MediaType)
-                    or nameof(MediaPreviewItem.Year)
-                    or nameof(MediaPreviewItem.Season)
-                    or nameof(MediaPreviewItem.Episode)
-                    or nameof(MediaPreviewItem.EpisodeTitle)
-                    or nameof(MediaPreviewItem.TmdbId))
-                {
-                    UpdateDestination(item);
-                }
-                else if (args.PropertyName is nameof(MediaPreviewItem.MatchState)
-                         or nameof(MediaPreviewItem.RequiresReview))
-                {
-                    UpdateActionState();
-                    CollectionViewSource.GetDefaultView(PreviewItems).Refresh();
-                }
-            };
-            UpdateDestination(item);
-            PreviewItems.Add(item);
+            AttachPreviewItem(item);
             addedItems.Add(item);
         }
 
@@ -1136,6 +1171,34 @@ public partial class MainWindow : Window
             : $"Added {addedItems.Count} media file(s); {PreviewItems.Count} total.";
         UpdateActionState();
         return addedItems;
+    }
+
+    private void AttachPreviewItem(MediaPreviewItem item)
+    {
+        item.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is nameof(MediaPreviewItem.MatchedTitle)
+                or nameof(MediaPreviewItem.MediaType)
+                or nameof(MediaPreviewItem.Year)
+                or nameof(MediaPreviewItem.Season)
+                or nameof(MediaPreviewItem.Episode)
+                or nameof(MediaPreviewItem.EpisodeEnd)
+                or nameof(MediaPreviewItem.EpisodeTitle)
+                or nameof(MediaPreviewItem.TvdbId)
+                or nameof(MediaPreviewItem.TmdbId))
+            {
+                UpdateDestination(item);
+            }
+            else if (args.PropertyName is nameof(MediaPreviewItem.MatchState)
+                     or nameof(MediaPreviewItem.RequiresReview))
+            {
+                UpdateActionState();
+                CollectionViewSource.GetDefaultView(PreviewItems).Refresh();
+            }
+        };
+        UpdateDestination(item);
+        PreviewItems.Add(item);
+
     }
 
     private void RefreshDestinations()
@@ -1431,7 +1494,8 @@ public partial class MainWindow : Window
         TmdbClient client,
         TvdbClient? tvdbClient,
         MediaPreviewItem matchedItem,
-        TmdbCandidate selected)
+        TmdbCandidate selected,
+        IReadOnlySet<MediaPreviewItem>? relatedTargets = null)
     {
         if (matchedItem.MediaType != "TV" || selected.MediaType != "TV")
         {
@@ -1440,7 +1504,9 @@ public partial class MainWindow : Window
 
         var cancellationToken = _operationCancellation?.Token ?? CancellationToken.None;
         var identity = TvShowIdentityMatcher.FromCandidate(selected);
-        foreach (var relatedItem in PreviewItems.Where(item => item != matchedItem && TvShowIdentityMatcher.IsRelatedEpisode(matchedItem, item)))
+        foreach (var relatedItem in PreviewItems.Where(item => item != matchedItem
+            && CanUpdateRelatedEpisode(item, relatedTargets)
+            && TvShowIdentityMatcher.IsRelatedEpisode(matchedItem, item)))
         {
             if (relatedItem.MediaType == "Unknown" && string.IsNullOrWhiteSpace(relatedItem.EpisodeTitle))
             {
@@ -1472,6 +1538,9 @@ public partial class MainWindow : Window
             UpdateDestination(relatedItem);
         }
     }
+
+    internal static bool CanUpdateRelatedEpisode(MediaPreviewItem item, IReadOnlySet<MediaPreviewItem>? targets) =>
+        targets is not null ? targets.Contains(item) : item.MatchState != "Manual choice";
 
     private static void ApplyLocalChoice(MediaPreviewItem item, string localMediaType)
     {

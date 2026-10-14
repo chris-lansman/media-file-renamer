@@ -111,7 +111,8 @@ jobs:
           if ($env:GITHUB_REF_TYPE -eq "tag") {
             $version = $env:GITHUB_REF_NAME.TrimStart("v")
           } else {
-            $version = "1.1.5-ci.$env:GITHUB_RUN_NUMBER"
+            [xml]$project = Get-Content src/MediaFileRenamer.App/MediaFileRenamer.App.csproj
+            $version = "$($project.Project.PropertyGroup.VersionPrefix)-ci.$env:GITHUB_RUN_NUMBER"
           }
           if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
             throw "The resolved version '$version' is not a valid SemVer version."

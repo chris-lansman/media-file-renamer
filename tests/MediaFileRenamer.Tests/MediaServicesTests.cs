@@ -87,7 +87,7 @@ public sealed class WindowSmokeTests
         window.PreviewItems.Single().Status = "Local movie choice";
 
         Assert.IsTrue(renameButton.IsEnabled);
-        Assert.AreEqual("All items reviewed", reviewCount.Text);
+        Assert.AreEqual("Ready to move", reviewCount.Text);
         window.Close();
     }
 

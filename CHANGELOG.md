@@ -3,6 +3,33 @@
 Notable user-visible changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/) for tagged releases.
 
+## Unreleased
+
+## 1.1.11 - 2026-10-13
+
+### Added
+
+- Clear batch restoration within the current session, with rescanned sources and companions and fresh review before transfer.
+- Helpful empty-filter states and a Show all files action when review is complete.
+- Search and show/season grouping, guided review navigation, and removal of individual files from the batch without deleting them.
+- Highlighted filename changes, copyable full paths, folder shortcuts, and exact companion-file destination previews.
+- A completion panel with destination, Undo, and expandable cleanup details.
+- Automatic review-session saving and safe restoration with rescanned sources and a fresh review requirement, plus remembered workspace size, columns, and naming preferences.
+- Clickable naming tokens, a live custom-format preview, and validation of unknown or incomplete tokens.
+
+### Changed
+
+- Ready to move/copy wording distinguishes transfer readiness from human review. Selected-file actions sit beside filename comparisons, and narrow windows prioritize the comparison with expandable staging options.
+- Setup and review controls reflow at smaller widths; the final action and operation status remain visible. Repeated table actions and path columns are consolidated into the selected-file view.
+- Manual editing and provider details are collapsible, movie selections hide TV fields, and unavailable artwork has a visual fallback.
+
+### Fixed
+
+- Re-match All repeats matching for existing provider matches and offers an explicit choice about replacing manual corrections; protected manual TV choices are preserved during related-show updates.
+- Confirm and next continues from the selected file rather than jumping to the first unresolved row.
+- The main menu's Undo action runs disk work in the background. Transfers prevent concurrent settings, history/recovery actions, editing, and window closure.
+- Navigating to a flagged row reveals it even when search or status filters previously hid it.
+
 ## 1.1.10 - 2026-09-10
 
 ### Changed
