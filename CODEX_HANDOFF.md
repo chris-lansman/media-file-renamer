@@ -4,13 +4,14 @@ Last verified: 2026-10-13.
 
 ## Current State
 
-- Release integration target: `main`, version `1.1.11`. The user authorized merging the approved `codex/review-workspace-polish` work and publishing the release; follow-up changes should start from updated `main` after integration.
+- Active branch: `main`. PR #9 integrated the approved review-workspace changes and release preparation in merge commit `50b13ae`; tag `v1.1.11` points to that commit. Follow-up changes should start from updated `main`.
 - Latest implementation: `1355b14` (review/workflow refinements); validation record: `b7e06b3`. These are the replacement commit IDs after the identity cleanup.
 - The user reviewed the preview and said the changes look great. Preserve the current visual style and keep import controls aligned to the right.
 - Local self-contained preview: `dist\MediaFileRenamer-ux-preview\MediaFileRenamer.exe`, version `1.1.11-preview.2+c56a160...`. ZIP and SHA-256 files are alongside it in `dist`; build outputs are ignored by Git and are not uploaded by a branch push.
 - Validation: 212 tests passed, formatting and diff checks passed, strict Release build had 0 warnings/errors. Ready and unresolved layouts were rendered at 640/1024/1360 pixels. The exact packaged executable passed two isolated save/reopen cycles and Clear batch restoration without changing the source fixture.
 - The release preparation updates MSTest.Sdk to 4.5.1. All 212 tests, formatting, strict Release build, and the dependency audit pass; no vulnerable or deprecated dependencies remain. Startup and isolated workspace restoration checks pass for the 1.1.11 candidate, as do disposable local copy/move, collision, cancel/rollback, Undo/timestamps, and crash-recovery acceptance cases.
-- The older `codex/stable-acceptance` and `codex/v1.1-polish` branches are already ancestors of `main`; their unique-commit counts are zero. Only the review-workspace branch needs integration. Verify GitHub PR, tag, workflow, and release assets before declaring publication complete.
+- All three development branches are now ancestors of `main`; their unique-commit counts are zero. No remaining branch work requires merging.
+- Release workflow: `https://github.com/chris-lansman/media-file-renamer/actions/runs/38501977746`. The tag workflow validates, packages, tests updater handoff, and publishes the Windows ZIP/checksum. Verify completion and release assets at `https://github.com/chris-lansman/media-file-renamer/releases/tag/v1.1.11` when resuming.
 - Personal-provider lookups, actual display scaling/themes, and the real-world acceptance matrix still require manual verification. See `docs\WORKSPACE-PREVIEW-TESTING.md` for the current checklist and evidence locations.
 
 ## Commit Identity and History Cleanup
