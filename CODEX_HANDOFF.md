@@ -1,9 +1,11 @@
 # Media File Renamer - Codex Handoff
 
-Last verified: 2026-10-13.
+Last verified: 2026-10-15.
 
 ## Current State
 
+- Current patch: `1.1.12` removes the extra Move/Copy confirmation. Clicking the final action starts preflight and transfer immediately. Empty/unresolved batches explain the problem inline. Preserve this user preference; do not reintroduce routine transfer confirmation dialogs.
+- Direct-action validation: all 212 tests pass. `scripts\Test-DirectTransfer.ps1` exercised the self-contained 1.1.12 candidate with isolated disposable files: Move and Copy each transferred media and subtitles with one transfer click, while collision preflight preserved the existing destination and sources without a popup. Evidence is under `TestResults\direct-transfer`.
 - Active branch: `main`. PR #9 integrated the approved review-workspace changes and release preparation in merge commit `50b13ae`; tag `v1.1.11` points to that commit. Follow-up changes should start from updated `main`.
 - Latest implementation: `1355b14` (review/workflow refinements); validation record: `b7e06b3`. These are the replacement commit IDs after the identity cleanup.
 - The user reviewed the preview and said the changes look great. Preserve the current visual style and keep import controls aligned to the right.
@@ -82,7 +84,7 @@ dist\MediaFileRenamer\MediaFileRenamer.exe
 3. Review original and proposed filenames in one table. Search, grouping, filters, and Previous/Next review navigation stay above the table; selected-file actions sit beside the highlighted filename comparison.
 4. Resolve flagged rows with **Choose Match...**, **Browse Episodes...**, or **Edit media details**. **Confirm and next** continues forward from the selected file, wrapping around to earlier unresolved rows.
 5. **Ready to move/copy** means no flagged rows remain, rather than claiming a human inspected automatic matches. After the final flagged item, an empty Needs review filter offers **Show all files**.
-6. Confirm **Move N files** or **Copy N files**. The final action and operation status stay visible while the workspace scrolls.
+6. Click **Move N files** or **Copy N files** to start immediately, with no second confirmation. The final action and operation status stay visible while the workspace scrolls. Automatic preflight, collision protection, rollback, and optional Undo remain in place.
 
 Successful rows are removed from the list after the move/copy. Rows that fail remain, with a status describing the problem.
 

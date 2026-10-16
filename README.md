@@ -35,7 +35,7 @@ The unified review table keeps each original file beside its proposed destinatio
 
 After confirming a TV match, **Always use this show for this folder** remembers the provider identity and episode order. Future batches from that show folder skip the series search and resolve episodes directly. Remembered mappings can be reviewed or removed in Settings.
 
-Apply performs a batch preflight and shows the exact operation, file count, companion-file count, size, and destination before changing anything. Subtitles, NFO files, artwork, and other same-stem companions follow the media file. Copy and cross-volume move operations use a temporary file, verify the completed length, and atomically finalize it. A failure or cancellation rolls back completed transfers. Recent operation journals are available from `File > Operation History`, and the most recent completed operation can be undone.
+Click **Move N files** or **Copy N files** to start immediately, with no extra confirmation dialog. The selected operation, count, staging folder, and proposed destinations are visible in the workspace before clicking. Automatic preflight still blocks unresolved matches, invalid destinations, and collisions. Subtitles, NFO files, artwork, and other same-stem companions follow the media file. Copy and cross-volume move operations use a temporary file, verify the completed length, and atomically finalize it. A failure or cancellation rolls back completed transfers. Recent operation journals are available from `File > Operation History`, and the most recent completed operation can be undone.
 
 ## Settings
 

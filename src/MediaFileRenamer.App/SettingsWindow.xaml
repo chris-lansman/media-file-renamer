@@ -47,7 +47,7 @@
                                FontWeight="SemiBold" FontSize="15"
                                Foreground="{DynamicResource AccentHoverBrush}"/>
                     <TextBlock Margin="0,5,0,0" TextWrapping="Wrap"
-                               Text="Add your personal provider credentials and test them, choose a staging folder, then select the default operation. Copy is recommended until you have verified the workflow with your own media. Nothing is changed until every item is reviewed and you confirm the batch."/>
+                               Text="Add your personal provider credentials and test them, choose a staging folder, then select the default operation. Copy is recommended until you have verified the workflow with your own media. Resolve flagged items and review destinations, then click Move files or Copy files to start immediately."/>
                 </StackPanel>
             </Border>
         </StackPanel>

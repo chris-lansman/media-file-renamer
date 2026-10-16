@@ -491,7 +491,7 @@ public partial class MainWindow : Window
     {
         if (PreviewItems.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Add files or a folder before applying a rename.", "Nothing to rename", MessageBoxButton.OK, MessageBoxImage.Information);
+            StatusTextBlock.Text = "Add files or a folder before moving or copying media.";
             return;
         }
 
@@ -503,35 +503,6 @@ public partial class MainWindow : Window
             OriginalGrid.SelectedItem = firstUnresolved;
             OriginalGrid.ScrollIntoView(firstUnresolved);
             StatusTextBlock.Text = "Review every flagged item before applying this batch.";
-            System.Windows.MessageBox.Show(
-                this,
-                $"{PreviewItems.Count(item => item.RequiresReview)} item(s) still need review. "
-                + "Choose or match each flagged item before applying; no files were moved or copied.",
-                "Review required",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-
-        var companionCount = PreviewItems.Sum(item => item.CompanionCount);
-        var sourcePaths = PreviewItems
-            .SelectMany(item => new[] { item.SourcePath }.Concat(item.CompanionPaths))
-            .ToArray();
-        var totalBytes = await Task.Run(() => sourcePaths
-            .Where(File.Exists)
-            .Sum(path => new FileInfo(path).Length));
-        var confirmation = System.Windows.MessageBox.Show(
-            this,
-            $"{operation} {PreviewItems.Count} media file(s)"
-            + (companionCount > 0 ? $" and {companionCount} companion file(s)" : "")
-            + $" ({FormatBytes(totalBytes)})?\n\nDestination:\n{OutputFolderTextBox.Text}\n\n"
-            + "The batch will be preflighted and rolled back if a transfer fails.",
-            "Confirm staged operation",
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Question);
-        if (confirmation != MessageBoxResult.OK)
-        {
-            StatusTextBlock.Text = "Operation canceled before any files were changed.";
             return;
         }
 
@@ -1551,20 +1522,6 @@ public partial class MainWindow : Window
             item.EpisodeTitle = item.TitleGuess;
         }
         item.Status = localMediaType == "TV" ? "Local TV choice" : "Local movie choice";
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        var units = new[] { "B", "KB", "MB", "GB", "TB" };
-        double value = bytes;
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return $"{value:0.##} {units[unit]}";
     }
 
     internal static string FormatMatchSummary(IEnumerable<MediaPreviewItem> items)
