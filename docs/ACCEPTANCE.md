@@ -88,9 +88,10 @@ so verify the identity and provider ID rather than relying only on result rank.
 
 ## Local operations, collisions, cancellation, and recovery
 
-Run each scenario from a fresh fixture input. Before applying, confirm that
-preflight shows the exact operation, source count, companion count, byte total,
-and destination root.
+Run each scenario from a fresh fixture input. Before applying, inspect the
+operation, file count, staging folder, and proposed destinations in the workspace.
+Click Move files or Copy files once: preflight and transfer must run without a
+second confirmation. A collision or unresolved row must still block the batch.
 
 | ID | Required | Test | Expected result | Result / evidence |
 | --- | --- | --- | --- | --- |

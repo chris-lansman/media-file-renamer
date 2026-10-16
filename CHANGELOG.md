@@ -5,6 +5,13 @@ Notable user-visible changes are recorded here. This project follows
 
 ## Unreleased
 
+## 1.1.12 - 2026-10-15
+
+### Changed
+
+- Move files and Copy files start immediately with one click, without a second confirmation dialog. Automatic preflight, collision protection, cancellation rollback, and optional Undo remain available.
+- Empty or unresolved batches explain the problem inline instead of opening another dialog.
+
 ## 1.1.11 - 2026-10-13
 
 ### Added
